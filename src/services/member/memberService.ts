@@ -1,6 +1,6 @@
-import { db } from "./firebase";
+import { db } from "../core/firebase";
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
-import type { Member } from "../types/member";
+import type { Member } from "../../types/member";
 
 const membersCol = collection(db, "members");
 

@@ -1,6 +1,6 @@
 import express from "express";
 import fetch from "node-fetch"; // to call Ollama API
-import { db } from "../services/firebase"; // Firestore setup
+import { db } from "../firebase"; // Firestore setup
 import { collection, getDocs } from "firebase/firestore";
 
 const router = express.Router();
