@@ -339,4 +339,5 @@ const AnimatedInputDemo: React.FC = () => {
   );
 };
 
+export { AnimatedInput };
 export default AnimatedInputDemo;
