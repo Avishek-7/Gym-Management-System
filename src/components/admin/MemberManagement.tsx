@@ -1,7 +1,9 @@
-import type { ChangeEvent, FC } from 'react';
-import { useMemo, useState } from 'react';
-import type { Member } from '@/types';
-import { Button } from '@/components/ui/button';
+import type { ChangeEvent, FC, FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Button } from '../ui/button';
+import { Input } from '../ui/form-input';
+import { addMember, getMembers, updateMember, deleteMember } from '../../services/member/memberService';
+import type { Member } from '../../types/member';
 import {
   Card,
   CardContent,
@@ -9,15 +11,14 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+} from '../ui/card';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '../ui/select';
 import {
   Table,
   TableBody,
@@ -25,109 +26,242 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from '../ui/table';
 
-interface MemberManagementProps {
-  members: Member[];
-  onAddMember: (member: Member) => void;
-  onUpdateMember: (updatedMember: Member) => void;
-  onDeleteMember: (memberId: string) => void;
+interface MemberFormState {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  membershipId: string;
+  joinDate: string;
+  status: Member['status'];
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelationship: string;
+  medicalConditions: string;
+  profileImage: string;
 }
 
-type MemberFormState = Pick<
-  Member,
-  'name' | 'age' | 'membershipType' | 'joinDate'
->;
-
-const defaultJoinDate = (): string => new Date().toISOString().split('T')[0];
-
 const createEmptyFormState = (): MemberFormState => ({
-  name: '',
-  age: 0,
-  membershipType: 'Basic',
-  joinDate: defaultJoinDate(),
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  dateOfBirth: '',
+  street: '',
+  city: '',
+  state: '',
+  zipCode: '',
+  country: '',
+  membershipId: '',
+  joinDate: new Date().toISOString().split('T')[0],
+  status: 'active',
+  emergencyContactName: '',
+  emergencyContactPhone: '',
+  emergencyContactRelationship: '',
+  medicalConditions: '',
+  profileImage: '',
 });
 
-const MemberManagement: FC<MemberManagementProps> = ({
-  members,
-  onAddMember,
-  onUpdateMember,
-  onDeleteMember,
-}) => {
-  const [formState, setFormState] = useState<MemberFormState>(
-    createEmptyFormState,
-  );
+const MemberManagement: FC = () => {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [formState, setFormState] = useState<MemberFormState>(createEmptyFormState());
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const membershipOptions = useMemo<Member['membershipType'][]>(
-    () => ['Basic', 'Premium', 'VIP'],
-    [],
-  );
+  const statusOptions = useMemo(() => ['active', 'inactive', 'suspended'] as const, []);
+
+  useEffect(() => {
+    loadMembers();
+  }, []);
+
+  const loadMembers = async () => {
+    try {
+      setLoading(true);
+      const fetchedMembers = await getMembers();
+      setMembers(fetchedMembers);
+    } catch (error) {
+      console.error('Failed to load members:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFieldErrorClear = (field: string) => {
+    setErrors((prev) => {
+      if (!prev[field]) {
+        return prev;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [field]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
 
   const resetForm = () => {
-    setFormState(createEmptyFormState);
+    setFormState(createEmptyFormState());
     setEditingMember(null);
+    setErrors({});
   };
 
-  const handleChange = (field: keyof MemberFormState, value: string) => {
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
     setFormState((prev) => ({
       ...prev,
-      [field]: field === 'age' ? Number(value) || 0 : value,
+      [name]: value,
     }));
+    handleFieldErrorClear(name);
   };
 
-  const handleInputChange =
-    (field: keyof MemberFormState) =>
-    (event: ChangeEvent<HTMLInputElement>) => {
-      handleChange(field, event.currentTarget.value);
-    };
+  const handleSelectChange = (field: keyof MemberFormState, value: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    handleFieldErrorClear(field);
+  };
 
-  const handleSubmit = () => {
-    const trimmedName = formState.name.trim();
-    const isValidAge = Number.isFinite(formState.age) && formState.age > 0;
+  const validateForm = (): boolean => {
+    const validationErrors: Record<string, string> = {};
 
-    if (!trimmedName || !isValidAge) {
+    if (!formState.firstName.trim()) {
+      validationErrors.firstName = 'First name is required.';
+    }
+    if (!formState.lastName.trim()) {
+      validationErrors.lastName = 'Last name is required.';
+    }
+    if (!formState.email.trim()) {
+      validationErrors.email = 'Email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email)) {
+      validationErrors.email = 'Please enter a valid email address.';
+    }
+    if (!formState.phone.trim()) {
+      validationErrors.phone = 'Phone number is required.';
+    }
+    if (!formState.dateOfBirth) {
+      validationErrors.dateOfBirth = 'Date of birth is required.';
+    }
+    if (!formState.membershipId.trim()) {
+      validationErrors.membershipId = 'Membership ID is required.';
+    }
+    if (!formState.joinDate) {
+      validationErrors.joinDate = 'Join date is required.';
+    }
+    if (!formState.emergencyContactName.trim()) {
+      validationErrors.emergencyContactName = 'Emergency contact name is required.';
+    }
+    if (!formState.emergencyContactPhone.trim()) {
+      validationErrors.emergencyContactPhone = 'Emergency contact phone is required.';
+    }
+
+    setErrors(validationErrors);
+    return Object.keys(validationErrors).length === 0;
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    
+    if (!validateForm()) {
       return;
     }
 
-    if (editingMember) {
-      onUpdateMember({
-        ...editingMember,
-        ...formState,
-        name: trimmedName,
-      });
-    } else {
-      const generatedId =
-        typeof crypto !== 'undefined' &&
-        typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try {
+      setSubmitting(true);
+      const now = new Date();
+      
+      const memberData: Omit<Member, 'id'> = {
+        firstName: formState.firstName.trim(),
+        lastName: formState.lastName.trim(),
+        email: formState.email.trim(),
+        phone: formState.phone.trim(),
+        dateOfBirth: new Date(formState.dateOfBirth),
+        address: {
+          street: formState.street.trim(),
+          city: formState.city.trim(),
+          state: formState.state.trim(),
+          zipCode: formState.zipCode.trim(),
+          country: formState.country.trim(),
+        },
+        membershipId: formState.membershipId.trim(),
+        joinDate: new Date(formState.joinDate),
+        status: formState.status,
+        emergencyContact: {
+          name: formState.emergencyContactName.trim(),
+          phone: formState.emergencyContactPhone.trim(),
+          relationship: formState.emergencyContactRelationship.trim(),
+        },
+        medicalConditions: formState.medicalConditions.trim() ? formState.medicalConditions.split(',').map(c => c.trim()) : undefined,
+        profileImage: formState.profileImage.trim() || undefined,
+        createdAt: editingMember?.createdAt ?? now,
+        updatedAt: now,
+      };
 
-      onAddMember({
-        id: generatedId,
-        ...formState,
-        name: trimmedName,
-      } as Member);
+      if (editingMember) {
+        await updateMember(editingMember.id, memberData);
+      } else {
+        await addMember(memberData);
+      }
+
+      await loadMembers();
+      resetForm();
+    } catch (error) {
+      console.error('Failed to save member:', error);
+    } finally {
+      setSubmitting(false);
     }
-
-    resetForm();
   };
 
   const handleEdit = (member: Member) => {
     setEditingMember(member);
     setFormState({
-      name: member.name,
-      age: member.age,
-      membershipType: member.membershipType,
-      joinDate: member.joinDate,
+      firstName: member.firstName,
+      lastName: member.lastName,
+      email: member.email,
+      phone: member.phone,
+      dateOfBirth: member.dateOfBirth instanceof Date ? member.dateOfBirth.toISOString().split('T')[0] : new Date(member.dateOfBirth).toISOString().split('T')[0],
+      street: member.address.street,
+      city: member.address.city,
+      state: member.address.state,
+      zipCode: member.address.zipCode,
+      country: member.address.country,
+      membershipId: member.membershipId,
+      joinDate: member.joinDate instanceof Date ? member.joinDate.toISOString().split('T')[0] : new Date(member.joinDate).toISOString().split('T')[0],
+      status: member.status,
+      emergencyContactName: member.emergencyContact.name,
+      emergencyContactPhone: member.emergencyContact.phone,
+      emergencyContactRelationship: member.emergencyContact.relationship,
+      medicalConditions: member.medicalConditions?.join(', ') || '',
+      profileImage: member.profileImage || '',
     });
+    setErrors({});
+  };
+
+  const handleDelete = async (memberId: string) => {
+    const member = members.find(m => m.id === memberId);
+    const memberName = member ? `${member.firstName} ${member.lastName}` : 'this member';
+    
+    const shouldDelete = window.confirm(`Delete ${memberName}? This action cannot be undone.`);
+    if (shouldDelete) {
+      try {
+        await deleteMember(memberId);
+        await loadMembers();
+      } catch (error) {
+        console.error('Failed to delete member:', error);
+      }
+    }
   };
 
   const isEditing = Boolean(editingMember);
-  const isSubmitDisabled =
-    !formState.name.trim() ||
-    !Number.isFinite(formState.age) ||
-    formState.age <= 0;
+  const isSubmitDisabled = submitting || !formState.firstName.trim() || !formState.lastName.trim() || !formState.email.trim() || !formState.phone.trim();
 
   return (
     <div className="space-y-6">
@@ -141,87 +275,352 @@ const MemberManagement: FC<MemberManagementProps> = ({
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium text-muted-foreground"
-              htmlFor="member-name"
-            >
-              Name
-            </label>
-            <Input
-              id="member-name"
-              placeholder="John Doe"
-              value={formState.name}
-              onChange={handleInputChange('name')}
-            />
-          </div>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Personal Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Personal Information</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="firstName">
+                    First Name
+                  </label>
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    value={formState.firstName}
+                    onChange={handleInputChange}
+                    placeholder="John"
+                    aria-describedby={errors.firstName ? "firstName-error" : undefined}
+                  />
+                  {errors.firstName && (
+                    <p id="firstName-error" className="mt-1 text-sm text-destructive">
+                      {errors.firstName}
+                    </p>
+                  )}
+                </div>
 
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium text-muted-foreground"
-              htmlFor="member-age"
-            >
-              Age
-            </label>
-            <Input
-              id="member-age"
-              type="number"
-              min={1}
-              placeholder="29"
-              value={formState.age ? String(formState.age) : ''}
-              onChange={handleInputChange('age')}
-            />
-          </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="lastName">
+                    Last Name
+                  </label>
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    value={formState.lastName}
+                    onChange={handleInputChange}
+                    placeholder="Doe"
+                    aria-describedby={errors.lastName ? "lastName-error" : undefined}
+                  />
+                  {errors.lastName && (
+                    <p id="lastName-error" className="mt-1 text-sm text-destructive">
+                      {errors.lastName}
+                    </p>
+                  )}
+                </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">
-              Membership Type
-            </label>
-            <Select
-              value={formState.membershipType}
-              onValueChange={(value) => handleChange('membershipType', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select membership" />
-              </SelectTrigger>
-              <SelectContent>
-                {membershipOptions.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="email">
+                    Email
+                  </label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formState.email}
+                    onChange={handleInputChange}
+                    placeholder="john.doe@example.com"
+                    aria-describedby={errors.email ? "email-error" : undefined}
+                  />
+                  {errors.email && (
+                    <p id="email-error" className="mt-1 text-sm text-destructive">
+                      {errors.email}
+                    </p>
+                  )}
+                </div>
 
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium text-muted-foreground"
-              htmlFor="member-join-date"
-            >
-              Join Date
-            </label>
-            <Input
-              id="member-join-date"
-              type="date"
-              value={formState.joinDate}
-              onChange={handleInputChange('joinDate')}
-            />
-          </div>
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="phone">
+                    Phone
+                  </label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    value={formState.phone}
+                    onChange={handleInputChange}
+                    placeholder="+1 (555) 123-4567"
+                    aria-describedby={errors.phone ? "phone-error" : undefined}
+                  />
+                  {errors.phone && (
+                    <p id="phone-error" className="mt-1 text-sm text-destructive">
+                      {errors.phone}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="dateOfBirth">
+                    Date of Birth
+                  </label>
+                  <Input
+                    id="dateOfBirth"
+                    name="dateOfBirth"
+                    type="date"
+                    value={formState.dateOfBirth}
+                    onChange={handleInputChange}
+                    aria-describedby={errors.dateOfBirth ? "dateOfBirth-error" : undefined}
+                  />
+                  {errors.dateOfBirth && (
+                    <p id="dateOfBirth-error" className="mt-1 text-sm text-destructive">
+                      {errors.dateOfBirth}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="profileImage">
+                    Profile Image URL (optional)
+                  </label>
+                  <Input
+                    id="profileImage"
+                    name="profileImage"
+                    type="url"
+                    value={formState.profileImage}
+                    onChange={handleInputChange}
+                    placeholder="https://example.com/profile.jpg"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Address Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Address</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium" htmlFor="street">
+                    Street Address
+                  </label>
+                  <Input
+                    id="street"
+                    name="street"
+                    value={formState.street}
+                    onChange={handleInputChange}
+                    placeholder="123 Main St"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="city">
+                    City
+                  </label>
+                  <Input
+                    id="city"
+                    name="city"
+                    value={formState.city}
+                    onChange={handleInputChange}
+                    placeholder="New York"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="state">
+                    State/Province
+                  </label>
+                  <Input
+                    id="state"
+                    name="state"
+                    value={formState.state}
+                    onChange={handleInputChange}
+                    placeholder="NY"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="zipCode">
+                    ZIP/Postal Code
+                  </label>
+                  <Input
+                    id="zipCode"
+                    name="zipCode"
+                    value={formState.zipCode}
+                    onChange={handleInputChange}
+                    placeholder="10001"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="country">
+                    Country
+                  </label>
+                  <Input
+                    id="country"
+                    name="country"
+                    value={formState.country}
+                    onChange={handleInputChange}
+                    placeholder="United States"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Membership Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Membership Details</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="membershipId">
+                    Membership ID
+                  </label>
+                  <Input
+                    id="membershipId"
+                    name="membershipId"
+                    value={formState.membershipId}
+                    onChange={handleInputChange}
+                    placeholder="MEM-001"
+                    aria-describedby={errors.membershipId ? "membershipId-error" : undefined}
+                  />
+                  {errors.membershipId && (
+                    <p id="membershipId-error" className="mt-1 text-sm text-destructive">
+                      {errors.membershipId}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="joinDate">
+                    Join Date
+                  </label>
+                  <Input
+                    id="joinDate"
+                    name="joinDate"
+                    type="date"
+                    value={formState.joinDate}
+                    onChange={handleInputChange}
+                    aria-describedby={errors.joinDate ? "joinDate-error" : undefined}
+                  />
+                  {errors.joinDate && (
+                    <p id="joinDate-error" className="mt-1 text-sm text-destructive">
+                      {errors.joinDate}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">Status</label>
+                  <Select
+                    value={formState.status}
+                    onValueChange={(value) => handleSelectChange('status', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option.charAt(0).toUpperCase() + option.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Emergency Contact */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Emergency Contact</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="emergencyContactName">
+                    Contact Name
+                  </label>
+                  <Input
+                    id="emergencyContactName"
+                    name="emergencyContactName"
+                    value={formState.emergencyContactName}
+                    onChange={handleInputChange}
+                    placeholder="Jane Doe"
+                    aria-describedby={errors.emergencyContactName ? "emergencyContactName-error" : undefined}
+                  />
+                  {errors.emergencyContactName && (
+                    <p id="emergencyContactName-error" className="mt-1 text-sm text-destructive">
+                      {errors.emergencyContactName}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="emergencyContactPhone">
+                    Contact Phone
+                  </label>
+                  <Input
+                    id="emergencyContactPhone"
+                    name="emergencyContactPhone"
+                    type="tel"
+                    value={formState.emergencyContactPhone}
+                    onChange={handleInputChange}
+                    placeholder="+1 (555) 987-6543"
+                    aria-describedby={errors.emergencyContactPhone ? "emergencyContactPhone-error" : undefined}
+                  />
+                  {errors.emergencyContactPhone && (
+                    <p id="emergencyContactPhone-error" className="mt-1 text-sm text-destructive">
+                      {errors.emergencyContactPhone}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium" htmlFor="emergencyContactRelationship">
+                    Relationship
+                  </label>
+                  <Input
+                    id="emergencyContactRelationship"
+                    name="emergencyContactRelationship"
+                    value={formState.emergencyContactRelationship}
+                    onChange={handleInputChange}
+                    placeholder="Spouse, Parent, etc."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Medical Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Medical Information (Optional)</h3>
+              <div>
+                <label className="block text-sm font-medium" htmlFor="medicalConditions">
+                  Medical Conditions
+                </label>
+                <Input
+                  id="medicalConditions"
+                  name="medicalConditions"
+                  value={formState.medicalConditions}
+                  onChange={handleInputChange}
+                  placeholder="Separate multiple conditions with commas"
+                />
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Enter any relevant medical conditions, allergies, or health considerations.
+                </p>
+              </div>
+            </div>
+
+            <CardFooter className="flex flex-col gap-2 px-0 sm:flex-row sm:justify-between">
+              <Button type="submit" disabled={isSubmitDisabled}>
+                {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Member'}
+              </Button>
+
+              {isEditing && (
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  Cancel Editing
+                </Button>
+              )}
+            </CardFooter>
+          </form>
         </CardContent>
 
-        <CardFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
-          <Button onClick={handleSubmit} disabled={isSubmitDisabled}>
-            {isEditing ? 'Save Changes' : 'Add Member'}
-          </Button>
 
-          {isEditing && (
-            <Button variant="outline" onClick={resetForm}>
-              Cancel Editing
-            </Button>
-          )}
-        </CardFooter>
       </Card>
 
       <Card>
@@ -233,57 +632,85 @@ const MemberManagement: FC<MemberManagementProps> = ({
         </CardHeader>
 
         <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="w-24">Age</TableHead>
-                <TableHead>Membership Type</TableHead>
-                <TableHead>Join Date</TableHead>
-                <TableHead className="w-40 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {members.length === 0 && (
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <div className="text-sm text-muted-foreground">Loading members...</div>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center text-sm text-muted-foreground"
-                  >
-                    No members found. Add your first member above.
-                  </TableCell>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Membership ID</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Join Date</TableHead>
+                  <TableHead className="w-40 text-right">Actions</TableHead>
                 </TableRow>
-              )}
+              </TableHeader>
 
-              {members.map((member) => (
-                <TableRow key={member.id}>
-                  <TableCell className="font-medium">
-                    {member.name}
-                  </TableCell>
-                  <TableCell>{member.age}</TableCell>
-                  <TableCell>{member.membershipType}</TableCell>
-                  <TableCell>{member.joinDate}</TableCell>
-                  <TableCell className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(member)}
+              <TableBody>
+                {members.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="text-center text-sm text-muted-foreground py-8"
                     >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => onDeleteMember(member.id)}
-                    >
-                      Delete
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                      No members found. Add your first member above.
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {members.map((member) => {
+                  const joinDate = member.joinDate instanceof Date 
+                    ? member.joinDate 
+                    : new Date(member.joinDate);
+                  
+                  return (
+                    <TableRow key={member.id}>
+                      <TableCell className="font-medium">
+                        {member.firstName} {member.lastName}
+                      </TableCell>
+                      <TableCell>{member.email}</TableCell>
+                      <TableCell>{member.phone}</TableCell>
+                      <TableCell>{member.membershipId}</TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          member.status === 'active' 
+                            ? 'bg-green-100 text-green-800' 
+                            : member.status === 'suspended'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
+                        </span>
+                      </TableCell>
+                      <TableCell>{joinDate.toLocaleDateString()}</TableCell>
+                      <TableCell className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(member)}
+                          aria-label={`Edit ${member.firstName} ${member.lastName}`}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(member.id)}
+                          aria-label={`Delete ${member.firstName} ${member.lastName}`}
+                        >
+                          Delete
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

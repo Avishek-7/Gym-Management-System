@@ -5,6 +5,7 @@ export * from './core/firebaseService';
 
 // Auth Services
 export * from './auth/authService';
+export * from './auth/roleService';
 
 // Member Services
 export * from './member/memberService';
