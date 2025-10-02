@@ -227,6 +227,17 @@ export interface AttendanceChartData {
   classAttendance: number;
 }
 
+// Incident Reporting Types
+export interface IncidentReport {
+  id: string;
+  category: string;
+  description: string;
+  reportedUser: string;
+  status?: 'open' | 'in_progress' | 'resolved';
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
 // Export Data Types
 export interface ExportOptions {
   format: 'pdf' | 'excel' | 'csv';

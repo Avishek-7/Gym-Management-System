@@ -1,7 +1,8 @@
 import type { ChangeEvent, FC, FormEvent } from 'react';
 import { useMemo, useState } from 'react';
+import type { IncidentReport } from '../../types/reports';
 import { Button } from '../ui/button';
-import Input from '../ui/input';
+import { Input } from '../ui/form-input';
 import {
   Card,
   CardContent,
@@ -17,67 +18,100 @@ import {
   SelectValue,
 } from '../ui/select';
 import { Textarea } from '../ui/textarea';
-import type { Report } from '../../services/reports';
+
+type IncidentDraft = Omit<IncidentReport, 'id' | 'status' | 'createdAt' | 'updatedAt'>;
+
+const createEmptyIncidentDraft = (): IncidentDraft => ({
+  category: '',
+  description: '',
+  reportedUser: '',
+});
 
 interface ReportsPanelProps {
-  reports: Report[];
-  onReportSubmit: (payload: Omit<Report, 'id' | 'status' | 'createdAt'>) => void;
+  reports: IncidentReport[];
+  onReportSubmit: (payload: IncidentDraft) => Promise<void> | void;
+  loading?: boolean;
 }
 
-const ReportsPanel: FC<ReportsPanelProps> = ({ reports, onReportSubmit }) => {
-  const [reportType, setReportType] = useState('');
-  const [description, setDescription] = useState('');
-  const [reportedUser, setReportedUser] = useState('');
+const formatTimestamp = (timestamp?: Date | string) => {
+  if (!timestamp) return 'Pending';
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? 'Pending' : date.toLocaleString();
+};
+
+const getStatusBadgeClasses = (status: IncidentReport['status']) => {
+  switch (status) {
+    case 'resolved':
+      return 'bg-emerald-100 text-emerald-700';
+    case 'in_progress':
+      return 'bg-amber-100 text-amber-700';
+    default:
+      return 'bg-slate-100 text-slate-700';
+  }
+};
+
+const ReportsPanel: FC<ReportsPanelProps> = ({ reports, onReportSubmit, loading = false }) => {
+  const [formState, setFormState] = useState<IncidentDraft>(createEmptyIncidentDraft);
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const reportTypeOptions = useMemo(() => {
-    const existingTypes = Array.from(new Set(reports.map((report) => report.type)));
+    const existingTypes = Array.from(new Set(reports.map((report) => report.category).filter(Boolean)));
     return existingTypes.length > 0 ? existingTypes : ['Misconduct', 'Equipment Issue', 'Billing', 'Other'];
   }, [reports]);
 
-  const highlightedReports = useMemo(
-    () => reports.slice(0, 5).map((report) => ({ ...report, createdAt: report.createdAt })),
-    [reports],
-  );
+  const highlightedReports = useMemo(() => reports.slice(0, 5), [reports]);
 
   const handleTypeChange = (value: string) => {
-    setReportType(value);
+    setFormState((prev) => ({ ...prev, category: value }));
     if (error) setError('');
   };
 
   const handleDescriptionChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setDescription(event.currentTarget.value);
+    setFormState((prev) => ({ ...prev, description: event.currentTarget.value }));
     if (error) setError('');
   };
 
   const handleReportedUserChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setReportedUser(event.currentTarget.value);
+    setFormState((prev) => ({ ...prev, reportedUser: event.currentTarget.value }));
     if (error) setError('');
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!reportType || !description.trim() || !reportedUser.trim()) {
+    const trimmedDescription = formState.description.trim();
+    const trimmedReportedUser = formState.reportedUser.trim();
+
+    if (!formState.category || !trimmedDescription || !trimmedReportedUser) {
       setError('All fields are required.');
       return;
     }
 
-    const payload: Omit<Report, 'id' | 'status' | 'createdAt'> = {
-      type: reportType,
-      description: description.trim(),
-      reportedUser: reportedUser.trim(),
+    const payload: IncidentDraft = {
+      category: formState.category,
+      description: trimmedDescription,
+      reportedUser: trimmedReportedUser,
     };
 
-    onReportSubmit(payload);
-
-    setReportType('');
-    setDescription('');
-    setReportedUser('');
-    setError('');
+    try {
+      setSubmitting(true);
+      await Promise.resolve(onReportSubmit(payload));
+      setFormState(createEmptyIncidentDraft());
+      setError('');
+    } catch (submissionError) {
+      console.error('Failed to submit incident report:', submissionError);
+      setError('Failed to submit the report. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const isSubmitDisabled = !reportType || !description.trim() || !reportedUser.trim();
+  const isSubmitDisabled =
+    submitting ||
+    !formState.category ||
+    !formState.description.trim() ||
+    !formState.reportedUser.trim();
 
   return (
     <div className="space-y-6">
@@ -92,8 +126,8 @@ const ReportsPanel: FC<ReportsPanelProps> = ({ reports, onReportSubmit }) => {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Report type</label>
-                <Select value={reportType} onValueChange={handleTypeChange}>
-                  <SelectTrigger>
+                <Select value={formState.category} onValueChange={handleTypeChange}>
+                  <SelectTrigger disabled={submitting}>
                     <SelectValue placeholder="Select a report type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -113,8 +147,9 @@ const ReportsPanel: FC<ReportsPanelProps> = ({ reports, onReportSubmit }) => {
                 <Input
                   id="reported-user"
                   placeholder="Enter the person’s full name"
-                  value={reportedUser}
+                  value={formState.reportedUser}
                   onChange={handleReportedUserChange}
+                  disabled={submitting}
                 />
               </div>
             </div>
@@ -127,8 +162,9 @@ const ReportsPanel: FC<ReportsPanelProps> = ({ reports, onReportSubmit }) => {
                 id="report-description"
                 placeholder="Describe the incident or issue in detail"
                 rows={5}
-                value={description}
+                value={formState.description}
                 onChange={handleDescriptionChange}
+                disabled={submitting}
               />
             </div>
 
@@ -136,7 +172,7 @@ const ReportsPanel: FC<ReportsPanelProps> = ({ reports, onReportSubmit }) => {
 
             <div className="flex justify-end">
               <Button type="submit" disabled={isSubmitDisabled}>
-                Submit report
+                {submitting ? 'Submitting…' : 'Submit report'}
               </Button>
             </div>
           </form>
@@ -150,19 +186,28 @@ const ReportsPanel: FC<ReportsPanelProps> = ({ reports, onReportSubmit }) => {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {highlightedReports.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading reports…</p>
+          ) : highlightedReports.length === 0 ? (
             <p className="text-sm text-muted-foreground">No reports submitted yet.</p>
           ) : (
             highlightedReports.map((report) => (
-              <div key={`report-${report.id ?? `${report.reportedUser}-${report.createdAt}`}`} className="rounded-lg border p-4">
+              <div key={`report-${report.id}`} className="space-y-2 rounded-lg border p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium capitalize">{report.type}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {report.createdAt ? new Date(report.createdAt).toLocaleString() : 'Pending'}
-                  </span>
+                  <span className="text-sm font-medium capitalize">{report.category}</span>
+                  <span className="text-xs text-muted-foreground">{formatTimestamp(report.createdAt)}</span>
                 </div>
-                <p className="mt-2 text-sm font-semibold">{report.reportedUser}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{report.description}</p>
+                {report.status && (
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeClasses(
+                      report.status,
+                    )}`}
+                  >
+                    {report.status.replace('_', ' ')}
+                  </span>
+                )}
+                <p className="text-sm font-semibold">{report.reportedUser}</p>
+                <p className="text-sm text-muted-foreground">{report.description}</p>
               </div>
             ))
           )}
