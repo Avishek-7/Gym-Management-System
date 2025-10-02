@@ -85,9 +85,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
     };
 
     return (
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md p-8 backdrop-blur-sm bg-gray-900/80">
+            <div className="mb-8 text-center">
+                <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
+                <p className="text-gray-400">Sign in to your account</p>
+            </div>
+            
             <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <AnimatedInput 
                         label="Email Address"
                         type="email"
@@ -96,6 +101,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                         error={errors.email}
                         success={Boolean(formData.email && validateEmail(formData.email))}
                         required
+                        className="w-full"
                     />
                     
                     <AnimatedInput
@@ -106,12 +112,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                         error={errors.password}
                         success={Boolean(formData.password && formData.password.length >= 6)}
                         required
+                        className="w-full"
                     />
                 </div>
                 
                 <Button 
                     type="submit" 
-                    className="w-full"
+                    className="w-full bg-blue-500"
                     disabled={isLoading}
                 >
                     {isLoading ? "Signing in..." : "Sign In"}

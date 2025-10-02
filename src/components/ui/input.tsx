@@ -54,18 +54,15 @@ const AnimatedInput: React.FC<AnimatedInputProps> = ({
   const sizeClasses = {
     sm: {
       padding: 'py-2',
-      fontSize: 'text-sm',
-      width: 'w-40'
+      fontSize: 'text-sm'
     },
     md: {
       padding: 'py-4',
-      fontSize: 'text-lg',
-      width: 'w-48'
+      fontSize: 'text-lg'
     },
     lg: {
       padding: 'py-5',
-      fontSize: 'text-xl',
-      width: 'w-56'
+      fontSize: 'text-xl'
     }
   };
 
@@ -119,7 +116,7 @@ const AnimatedInput: React.FC<AnimatedInputProps> = ({
   };
 
   return (
-    <div className={`relative ${sizeClasses[size].width} ${className}`}>
+    <div className={`relative ${className}`}>
       <div className="relative mb-10">
         <input
           ref={inputRef}

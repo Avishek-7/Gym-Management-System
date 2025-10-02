@@ -96,7 +96,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 	};
 
 	return (
-		<Card className="w-full max-w-xl mx-auto p-6 sm:p-8">
+		<Card className="w-full max-w-md p-8 backdrop-blur-sm bg-gray-900/80">
+			<div className="mb-8 text-center">
+				<h1 className="text-3xl font-bold text-white mb-2">Hey there! Ready to create an account?</h1>
+				<p className="text-gray-400">Please fill in the details below to get started.</p>
+			</div>
 			<form onSubmit={handleSubmit} className="space-y-6">
 				<div className="space-y-5">
 					<AnimatedInput
@@ -143,7 +147,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 					/>
 				</div>
 
-				<Button type="submit" className="w-full" disabled={isSubmitting}>
+				<Button type="submit" className="w-full bg-blue-500" disabled={isSubmitting}>
 					{isSubmitting ? "Creating account..." : "Create account"}
 				</Button>
 			</form>

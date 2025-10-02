@@ -135,10 +135,10 @@ export const PasswordReset: React.FC<PasswordResetProps> = ({
 	};
 
 	return (
-		<Card className="w-full max-w-xl mx-auto p-6 sm:p-8 space-y-6">
-			<div className="space-y-2 text-center">
-				<h2 className="text-2xl font-semibold text-foreground">Reset your password</h2>
-				<p className="text-sm text-muted-foreground">
+		<Card className="w-full max-w-md p-8 backdrop-blur-sm bg-gray-900/80">
+			<div className="mb-8 text-center">
+				<h2 className="text-3xl font-bold text-white mb-2">Reset your password</h2>
+				<p className="text-gray-400">
 					Enter the email associated with your account. We&apos;ll send you a code to verify
 					the request before you set a new password.
 				</p>
@@ -162,6 +162,7 @@ export const PasswordReset: React.FC<PasswordResetProps> = ({
 							</p>
 							<Button
 								type="button"
+								className="bg-blue-500"
 								variant="secondary"
 								onClick={handleSendCode}
 								disabled={isSendingCode || !formData.email}
@@ -205,7 +206,7 @@ export const PasswordReset: React.FC<PasswordResetProps> = ({
 					/>
 				</div>
 
-				<Button type="submit" className="w-full" disabled={isSubmitting}>
+				<Button type="submit" className="w-full bg-blue-500" disabled={isSubmitting}>
 					{isSubmitting ? "Updating password..." : "Update password"}
 				</Button>
 			</form>
