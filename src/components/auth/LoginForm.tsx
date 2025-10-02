@@ -3,9 +3,11 @@ import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { AnimatedInput } from "../ui/input";
 
+
 interface LoginFormValues {
     email: string;
     password: string;
+    comments?: string;
 }
 
 interface LoginFormProps {
@@ -83,10 +85,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
     };
 
     return (
-        <Card className="w-full max-w-md mx-auto p-6">
+        <Card className="w-full max-w-md">
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
-                    <AnimatedInput
+                    <AnimatedInput 
                         label="Email Address"
                         type="email"
                         value={formData.email}
