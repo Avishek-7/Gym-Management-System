@@ -1,7 +1,10 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { AnimatedInput } from "../ui/input";
+import { loginUser } from "../../services/auth/authService";
+import { ensureUserRole } from "../../services/auth/roleService";
 
 
 interface LoginFormValues {
@@ -55,16 +58,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
 
         setIsLoading(true);
         try {
-            // Call the onLogin prop if provided, otherwise just log
+            // Call the onLogin prop if provided, otherwise use the authService
             if (onLogin) {
                 await onLogin(formData.email, formData.password);
             } else {
-                console.log("Login data:", formData);
-                // Add your default login logic here
+                const user = await loginUser(formData.email, formData.password);
+                // Ensure user has a role assigned (creates default 'member' role if none exists)
+                const userRole = await ensureUserRole(user.uid);
+                console.log("Login successful! User role:", userRole);
             }
         } catch (error) {
             console.error("Login error:", error);
-            // Handle login error
+            // Handle login error - you can set an error message here
+            setErrors(prev => ({ ...prev, password: "Invalid email or password" }));
         } finally {
             setIsLoading(false);
         }
@@ -124,6 +130,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                     {isLoading ? "Signing in..." : "Sign In"}
                 </Button>
             </form>
+
+            <div className="mt-6 text-center">
+                <p className="text-sm text-gray-400">
+                    Don't have an account?{" "}
+                    <Link to="/register" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+                        Sign up
+                    </Link>
+                </p>
+            </div>
         </Card>
     );
 };

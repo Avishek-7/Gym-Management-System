@@ -1,0 +1,336 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========================================
+    // HELPER FUNCTIONS
+    // ========================================
+    
+    /**
+     * Check if user is authenticated
+     */
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    /**
+     * Get user's role from userRoles collection
+     */
+    function getUserRole(userId) {
+      return get(/databases/$(database)/documents/userRoles/$(userId)).data.role;
+    }
+    
+    /**
+     * Check if authenticated user has a specific role
+     */
+    function hasRole(role) {
+      return isAuthenticated() && getUserRole(request.auth.uid) == role;
+    }
+    
+    /**
+     * Check if authenticated user has any of the specified roles
+     */
+    function hasAnyRole(roles) {
+      return isAuthenticated() && getUserRole(request.auth.uid) in roles;
+    }
+    
+    /**
+     * Check if user is admin
+     */
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    /**
+     * Check if user is member
+     */
+    function isMember() {
+      return hasRole('member');
+    }
+    
+    /**
+     * Check if user is trainer
+     */
+    function isTrainer() {
+      return hasRole('trainer');
+    }
+    
+    /**
+     * Check if user is accessing their own document
+     */
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ========================================
+    // USER ROLES COLLECTION
+    // ========================================
+    
+    match /userRoles/{userId} {
+      // Users can read their own role
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      
+      // Only admins can create/update/delete roles
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // MEMBERS COLLECTION
+    // ========================================
+    
+    match /members/{memberId} {
+      // All authenticated users can read member data
+      allow read: if isAuthenticated();
+      
+      // Only admins can create, update, or delete members
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // BILLS COLLECTION
+    // ========================================
+    
+    match /bills/{billId} {
+      // Admins can read all bills
+      // Members can only read their own bills
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Only admins can create, update, or delete bills
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // SUBSCRIPTIONS COLLECTION
+    // ========================================
+    
+    match /subscriptions/{subscriptionId} {
+      // Admins can read all subscriptions
+      // Members can only read their own subscriptions
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Only admins can create, update, or delete subscriptions
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // PAYMENTS COLLECTION
+    // ========================================
+    
+    match /payments/{paymentId} {
+      // Admins can read all payments
+      // Members can only read their own payments
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Only admins can create or update payments
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // RECEIPTS COLLECTION
+    // ========================================
+    
+    match /receipts/{receiptId} {
+      // Admins can read all receipts
+      // Members can only read their own receipts
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Only admins can create, update, or delete receipts
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // NOTIFICATIONS COLLECTION
+    // ========================================
+    
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Admins and trainers can create notifications
+      allow create: if isAdmin() || isTrainer();
+      
+      // Users can update their own notifications (e.g., mark as read)
+      // Admins can update any notification
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Only admins can delete notifications
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // CLASSES COLLECTION
+    // ========================================
+    
+    match /classes/{classId} {
+      // All authenticated users can read classes
+      allow read: if isAuthenticated();
+      
+      // Admins and trainers can create, update classes
+      allow create: if isAdmin() || isTrainer();
+      allow update: if isAdmin() || isTrainer();
+      
+      // Only admins can delete classes
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // ATTENDANCE COLLECTION
+    // ========================================
+    
+    match /attendance/{attendanceId} {
+      // Admins and trainers can read all attendance
+      // Members can only read their own attendance
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        isTrainer() || 
+        resource.data.memberId == request.auth.uid
+      );
+      
+      // Admins and trainers can create/update attendance
+      allow create: if isAdmin() || isTrainer();
+      allow update: if isAdmin() || isTrainer();
+      
+      // Only admins can delete attendance records
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // INVENTORY COLLECTION
+    // ========================================
+    
+    match /inventory/{itemId} {
+      // All authenticated users can read inventory
+      allow read: if isAuthenticated();
+      
+      // Only admins can manage inventory
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // REPORTS COLLECTION
+    // ========================================
+    
+    match /reports/{reportId} {
+      // Only admins can access reports
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // ANALYTICS COLLECTION
+    // ========================================
+    
+    match /analytics/{analyticId} {
+      // Only admins can access analytics
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // TRAINERS COLLECTION
+    // ========================================
+    
+    match /trainers/{trainerId} {
+      // All authenticated users can read trainer profiles
+      allow read: if isAuthenticated();
+      
+      // Trainers can update their own profile
+      // Admins can update any trainer profile
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        isOwner(trainerId)
+      );
+      
+      // Only admins can create or delete trainers
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // MEMBERSHIPS COLLECTION
+    // ========================================
+    
+    match /memberships/{membershipId} {
+      // All authenticated users can read membership types
+      allow read: if isAuthenticated();
+      
+      // Only admins can manage membership types
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // USER PROFILES COLLECTION
+    // ========================================
+    
+    match /userProfiles/{userId} {
+      // Users can read their own profile
+      // Admins can read any profile
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        isOwner(userId)
+      );
+      
+      // Users can create/update their own profile
+      // Admins can create/update any profile
+      allow create: if isAuthenticated() && (
+        isAdmin() || 
+        isOwner(userId)
+      );
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        isOwner(userId)
+      );
+      
+      // Only admins can delete profiles
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // DEFAULT DENY ALL
+    // ========================================
+    
+    // Deny access to all other collections by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

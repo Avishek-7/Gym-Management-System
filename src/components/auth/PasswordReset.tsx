@@ -1,40 +1,32 @@
 import React, { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { AnimatedInput } from "../ui/input";
+import { resetPassword } from "../../services/auth/authService";
 
 interface PasswordResetFormValues {
 	email: string;
-	verificationCode: string;
-	newPassword: string;
-	confirmPassword: string;
 }
 
 interface PasswordResetProps {
-	onSendResetCode?: (email: string) => Promise<void> | void;
-	onResetPassword?: (
-		payload: Pick<PasswordResetFormValues, "email" | "verificationCode" | "newPassword">
-	) => Promise<void> | void;
+	onResetPassword?: (email: string) => Promise<void> | void;
 }
 
 const DEFAULT_FORM_STATE: PasswordResetFormValues = {
 	email: "",
-	verificationCode: "",
-	newPassword: "",
-	confirmPassword: "",
 };
 
 type FormErrors = Partial<Record<keyof PasswordResetFormValues, string>>;
 
 export const PasswordReset: React.FC<PasswordResetProps> = ({
-	onSendResetCode,
 	onResetPassword,
 }) => {
 	const [formData, setFormData] = useState<PasswordResetFormValues>(DEFAULT_FORM_STATE);
 	const [errors, setErrors] = useState<FormErrors>({});
-	const [isSendingCode, setIsSendingCode] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [statusMessage, setStatusMessage] = useState<string | null>(null);
+	const [isSuccess, setIsSuccess] = useState(false);
 
 	const isEmailValid = useMemo(() => {
 		if (!formData.email) return false;
@@ -49,22 +41,6 @@ export const PasswordReset: React.FC<PasswordResetProps> = ({
 			newErrors.email = formData.email ? "Please enter a valid email" : "Email is required";
 		}
 
-		if (!formData.verificationCode.trim()) {
-			newErrors.verificationCode = "Verification code is required";
-		}
-
-		if (!formData.newPassword) {
-			newErrors.newPassword = "New password is required";
-		} else if (formData.newPassword.length < 6) {
-			newErrors.newPassword = "Password must be at least 6 characters";
-		}
-
-		if (!formData.confirmPassword) {
-			newErrors.confirmPassword = "Please confirm your new password";
-		} else if (formData.newPassword !== formData.confirmPassword) {
-			newErrors.confirmPassword = "Passwords do not match";
-		}
-
 		setErrors(newErrors);
 		return Object.keys(newErrors).length === 0;
 	};
@@ -75,30 +51,7 @@ export const PasswordReset: React.FC<PasswordResetProps> = ({
 			setErrors((prev) => ({ ...prev, [field]: undefined }));
 		}
 		setStatusMessage(null);
-	};
-
-	const handleSendCode = async () => {
-		if (!isEmailValid) {
-			setErrors((prev) => ({ ...prev, email: "Enter a valid email before requesting a code" }));
-			return;
-		}
-
-		if (!onSendResetCode) {
-			setStatusMessage("Simulated: reset code sent to your email.");
-			return;
-		}
-
-		try {
-			setIsSendingCode(true);
-			setStatusMessage(null);
-			await onSendResetCode(formData.email.trim());
-			setStatusMessage("We just sent a verification code to your email.");
-		} catch (error) {
-			console.error("Password reset code error", error);
-			setStatusMessage("Something went wrong while sending the code. Please try again.");
-		} finally {
-			setIsSendingCode(false);
-		}
+		setIsSuccess(false);
 	};
 
 	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -107,28 +60,25 @@ export const PasswordReset: React.FC<PasswordResetProps> = ({
 			return;
 		}
 
-		const payload = {
-			email: formData.email.trim(),
-			verificationCode: formData.verificationCode.trim(),
-			newPassword: formData.newPassword,
-		};
-
 		try {
 			setIsSubmitting(true);
 			setStatusMessage(null);
+			setIsSuccess(false);
 
+			// Use the provided callback or fall back to the imported service function
 			if (onResetPassword) {
-				await onResetPassword(payload);
-				setStatusMessage("Your password has been updated. You can now sign in.");
+				await onResetPassword(formData.email.trim());
 			} else {
-				console.log("Password reset payload", payload);
-				setStatusMessage("Simulated: password would be reset.");
+				await resetPassword(formData.email.trim());
 			}
-
+			
+			setStatusMessage("Password reset email sent! Please check your inbox and follow the instructions.");
+			setIsSuccess(true);
 			setFormData(DEFAULT_FORM_STATE);
 		} catch (error) {
 			console.error("Password reset error", error);
-			setStatusMessage("Something went wrong while resetting your password. Try again.");
+			setStatusMessage("Something went wrong while sending the reset email. Please try again.");
+			setIsSuccess(false);
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -139,83 +89,44 @@ export const PasswordReset: React.FC<PasswordResetProps> = ({
 			<div className="mb-8 text-center">
 				<h2 className="text-3xl font-bold text-white mb-2">Reset your password</h2>
 				<p className="text-gray-400">
-					Enter the email associated with your account. We&apos;ll send you a code to verify
-					the request before you set a new password.
+					Enter your email address and we&apos;ll send you a link to reset your password.
 				</p>
 			</div>
 
 			<form onSubmit={handleSubmit} className="space-y-6">
 				<div className="space-y-5">
-					<div className="space-y-3">
-						<AnimatedInput
-							label="Email address"
-							type="email"
-							value={formData.email}
-							onChange={handleChange("email")}
-							error={errors.email}
-							success={Boolean(formData.email && isEmailValid && !errors.email)}
-							required
-						/>
-						<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-							<p className="text-xs text-muted-foreground">
-								We&apos;ll send a verification code to this email.
-							</p>
-							<Button
-								type="button"
-								className="bg-blue-500"
-								variant="secondary"
-								onClick={handleSendCode}
-								disabled={isSendingCode || !formData.email}
-							>
-								{isSendingCode ? "Sending..." : "Send verification code"}
-							</Button>
-						</div>
-					</div>
-
 					<AnimatedInput
-						label="Verification code"
-						value={formData.verificationCode}
-						onChange={handleChange("verificationCode")}
-						error={errors.verificationCode}
-						success={Boolean(formData.verificationCode && !errors.verificationCode)}
+						label="Email address"
+						type="email"
+						value={formData.email}
+						onChange={handleChange("email")}
+						error={errors.email}
+						success={Boolean(formData.email && isEmailValid && !errors.email)}
 						required
-					/>
-
-					<AnimatedInput
-						label="New password"
-						type="password"
-						value={formData.newPassword}
-						onChange={handleChange("newPassword")}
-						error={errors.newPassword}
-						success={Boolean(formData.newPassword && formData.newPassword.length >= 6)}
-						required
-					/>
-
-					<AnimatedInput
-						label="Confirm new password"
-						type="password"
-						value={formData.confirmPassword}
-						onChange={handleChange("confirmPassword")}
-						error={errors.confirmPassword}
-						success={Boolean(
-							formData.confirmPassword &&
-								formData.confirmPassword === formData.newPassword &&
-								!errors.confirmPassword
-						)}
-						required
+						className="w-full"
 					/>
 				</div>
 
 				<Button type="submit" className="w-full bg-blue-500" disabled={isSubmitting}>
-					{isSubmitting ? "Updating password..." : "Update password"}
+					{isSubmitting ? "Sending reset link..." : "Send reset link"}
 				</Button>
 			</form>
 
 			{statusMessage && (
-				<div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+				<div className={`mt-4 rounded-md border px-4 py-3 text-sm ${
+					isSuccess 
+						? 'border-green-500 bg-green-500/10 text-green-400' 
+						: 'border-border bg-muted/40 text-muted-foreground'
+				}`}>
 					{statusMessage}
 				</div>
 			)}
+
+			<div className="mt-6 text-center">
+				<Link to="/login" className="text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors">
+					← Back to login
+				</Link>
+			</div>
 		</Card>
 	);
 };

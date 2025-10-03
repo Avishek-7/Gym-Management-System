@@ -1,7 +1,10 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { AnimatedInput } from "../ui/input";
+import { registerUser } from "../../services/auth/authService";
+import { ensureUserRole } from "../../services/auth/roleService";
 
 interface RegisterFormValues {
 	fullName: string;
@@ -81,15 +84,23 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 				password: formData.password,
 			};
 
+			// Call the onRegister prop if provided, otherwise use the authService
 			if (onRegister) {
 				await onRegister(payload);
 			} else {
-				console.log("Register payload", payload);
+				const user = await registerUser(payload.email, payload.password, payload.fullName);
+				// Assign default 'member' role to new user
+				await ensureUserRole(user.uid, 'member');
+				console.log("Registration successful! User role assigned.");
 			}
 
 			setFormData(DEFAULT_FORM_STATE);
 		} catch (error) {
 			console.error("Registration error", error);
+			// Handle registration error - you can set an error message here
+			if (error instanceof Error) {
+				setErrors(prev => ({ ...prev, email: error.message || "Registration failed" }));
+			}
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -151,6 +162,21 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 					{isSubmitting ? "Creating account..." : "Create account"}
 				</Button>
 			</form>
+
+			<div className="mt-6 space-y-3 text-center">
+				<p className="text-sm text-gray-400">
+					Already have an account?{" "}
+					<Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+						Sign in
+					</Link>
+				</p>
+				<p className="text-sm text-gray-400">
+					Forgot your password?{" "}
+					<Link to="/password-reset" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+						Reset it here
+					</Link>
+				</p>
+			</div>
 		</Card>
 	);
 };
