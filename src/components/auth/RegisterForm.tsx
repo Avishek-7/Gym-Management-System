@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { AnimatedInput } from "../ui/input";
@@ -25,6 +25,7 @@ const DEFAULT_FORM_STATE: RegisterFormValues = {
 };
 
 export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
+	const navigate = useNavigate();
 	const [formData, setFormData] = useState<RegisterFormValues>(DEFAULT_FORM_STATE);
 	const [errors, setErrors] = useState<Partial<Record<keyof RegisterFormValues, string>>>({});
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,8 +91,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 			} else {
 				const user = await registerUser(payload.email, payload.password, payload.fullName);
 				// Assign default 'member' role to new user
-				await ensureUserRole(user.uid, 'member');
-				console.log("Registration successful! User role assigned.");
+				const userRole = await ensureUserRole(user.uid, 'member');
+				console.log("Registration successful! User role assigned:", userRole);
+				
+				// Redirect to member dashboard after successful registration
+				navigate('/member/dashboard');
 			}
 
 			setFormData(DEFAULT_FORM_STATE);

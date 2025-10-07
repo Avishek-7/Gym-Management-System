@@ -26,3 +26,16 @@ dist-ssr
 .env.local
 .env.development
 .env.production
+
+# Documentation files (auto-generated)
+RBAC_GUIDE.md
+RBAC_QUICK_REF.md
+ROLE_AUDIT.md
+FIRESTORE_RULES_FIX.md
+LOGIN_REDIRECT_FIX.md
+DASHBOARD_BACKGROUNDS.md
+DARK_GLASS_EFFECT.md
+IMPLEMENTATION_SUMMARY.md
+DEPLOYMENT_CHECKLIST.md
+logout_component.md
+# Keep README.md and ARCHITECTURE.md

@@ -15,10 +15,18 @@ service cloud.firestore {
     }
     
     /**
+     * Check if user role document exists
+     */
+    function userRoleExists(userId) {
+      return exists(/databases/$(database)/documents/userRoles/$(userId));
+    }
+    
+    /**
      * Get user's role from userRoles collection
+     * Returns null if role doesn't exist
      */
     function getUserRole(userId) {
-      return get(/databases/$(database)/documents/userRoles/$(userId)).data.role;
+      return userRoleExists(userId) ? get(/databases/$(database)/documents/userRoles/$(userId)).data.role : null;
     }
     
     /**
@@ -68,11 +76,15 @@ service cloud.firestore {
     // ========================================
     
     match /userRoles/{userId} {
-      // Users can read their own role
+      // Users can read their own role (even if it doesn't exist yet)
+      // Admins can read any role
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
       
-      // Only admins can create/update/delete roles
-      allow create: if isAdmin();
+      // Allow creating a role for a new user (first-time only)
+      // This allows registration to set default 'member' role
+      allow create: if isAuthenticated() && isOwner(userId) && !exists(/databases/$(database)/documents/userRoles/$(userId));
+      
+      // Only admins can update/delete roles after initial creation
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

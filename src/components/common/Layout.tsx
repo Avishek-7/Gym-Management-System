@@ -35,9 +35,9 @@ const Layout: React.FC<LayoutProps> = ({
     }, [resolvedTitle]);
 
     return (
-        <div className="min-h-screen bg-gray-100">
+        <div className="min-h-screen">
 
-            <header className="bg-white shadow-sm">
+            <header className="bg-gray-900/50 backdrop-blur-lg shadow-lg border-b border-white/10">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
                     <div className="flex items-start gap-4">
                         {sidebar && (
@@ -58,8 +58,8 @@ const Layout: React.FC<LayoutProps> = ({
                             </Button>
                         )}
                         <div>
-                            <h1 className="text-xl font-semibold text-gray-800">{resolvedTitle}</h1>
-                            <p className="text-sm text-gray-500">{resolvedSubtitle}</p>
+                            <h1 className="text-xl font-semibold text-white">{resolvedTitle}</h1>
+                            <p className="text-sm text-gray-300">{resolvedSubtitle}</p>
                         </div>
                     </div>
                     {headerActions && <div className="flex items-center gap-3">{headerActions}</div>}
@@ -72,11 +72,11 @@ const Layout: React.FC<LayoutProps> = ({
                         <aside
                             id="layout-mobile-sidebar"
                             aria-label={sidebarLabel ?? "Sidebar"}
-                            className={`fixed inset-y-0 left-0 z-40 w-64 transform bg-white shadow-lg transition-transform duration-200 ease-in-out md:hidden ${
+                            className={`fixed inset-y-0 left-0 z-40 w-64 transform bg-white/90 backdrop-blur-sm shadow-lg transition-transform duration-200 ease-in-out md:hidden ${
                                 isSidebarOpen ? "translate-x-0" : "-translate-x-full"
                             }`}
                         >
-                            <div className="h-full overflow-y-auto border-r border-gray-200 bg-gray-50 p-4">
+                            <div className="h-full overflow-y-auto border-r border-gray-200 bg-gray-50/90 backdrop-blur-sm p-4">
                                 {sidebar}
                             </div>
                         </aside>
@@ -88,7 +88,7 @@ const Layout: React.FC<LayoutProps> = ({
                 )}
 
                 <main className="flex-1" role="main">
-                    <div className="rounded-lg bg-white p-6 shadow-sm">{children}</div>
+                    <div className="rounded-lg bg-gray-900/60 backdrop-blur-lg p-6 shadow-lg border border-white/10">{children}</div>
                 </main>
             </div>
 

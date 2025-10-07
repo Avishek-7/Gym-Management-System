@@ -1,11 +1,13 @@
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-// import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import PasswordResetPage from './pages/auth/PasswordResetPage';
 import UnauthorizedPage from './pages/auth/UnauthorizedPage';
-// import DashboardPage from './pages/DashboardPage';
+import MemberDashboard from './pages/member/MemberDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import TrainerDashboard from './pages/trainer/TrainerDashboard';
 
 function App() {
   return (
@@ -18,45 +20,38 @@ function App() {
           <Route path="/password-reset" element={<PasswordResetPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-          {/* Protected Routes - Require Authentication */}
-          {/* <Route 
-            path="/dashboard" 
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            } 
-          /> */}
-
-          {/* Admin Only Routes */}
-          {/* <Route 
-            path="/admin/*" 
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AdminRoutes />
-              </ProtectedRoute>
-            } 
-          /> */}
-
-          {/* Member Routes */}
-          {/* <Route 
-            path="/member/*" 
+          {/* Member Dashboard - Protected Route */}
+          <Route 
+            path="/member/dashboard" 
             element={
               <ProtectedRoute requiredRole="member">
-                <MemberRoutes />
+                <MemberDashboard />
               </ProtectedRoute>
             } 
-          /> */}
+          />
 
-          {/* Trainer Routes */}
-          {/* <Route 
-            path="/trainer/*" 
+          {/* Redirect for backward compatibility */}
+          <Route path="/MemberDashboard" element={<Navigate to="/member/dashboard" replace />} />
+
+          {/* Admin Dashboard - Protected Route */}
+          <Route 
+            path="/admin/dashboard" 
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Trainer Dashboard - Protected Route */}
+          <Route 
+            path="/trainer/dashboard" 
             element={
               <ProtectedRoute requiredRole="trainer">
-                <TrainerRoutes />
+                <TrainerDashboard />
               </ProtectedRoute>
             } 
-          /> */}
+          />
 
           {/* Default redirect to login */}
           <Route path="/" element={<Navigate to="/login" replace />} />

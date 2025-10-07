@@ -80,7 +80,7 @@ export const BillHistory: React.FC<BillHistoryProps> = ({
     };
 
     return (
-        <Card className="w-full backdrop-blur-sm bg-gray-900/80 border-gray-800">
+        <Card className="w-full backdrop-blur-sm bg-gray-900/70 border-white/20">
             <CardHeader className="border-b border-gray-800">
                 <CardTitle className="text-2xl font-bold text-white">
                     Bill History

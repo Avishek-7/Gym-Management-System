@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { AnimatedInput } from "../ui/input";
@@ -18,6 +18,7 @@ interface LoginFormProps {
 }
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
+    const navigate = useNavigate();
     const [formData, setFormData] = useState<LoginFormValues>({
         email: "",
         password: ""
@@ -66,6 +67,20 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                 // Ensure user has a role assigned (creates default 'member' role if none exists)
                 const userRole = await ensureUserRole(user.uid);
                 console.log("Login successful! User role:", userRole);
+                
+                // Redirect based on user role
+                switch (userRole) {
+                    case 'admin':
+                        navigate('/admin/dashboard');
+                        break;
+                    case 'trainer':
+                        navigate('/trainer/dashboard');
+                        break;
+                    case 'member':
+                    default:
+                        navigate('/member/dashboard');
+                        break;
+                }
             }
         } catch (error) {
             console.error("Login error:", error);
