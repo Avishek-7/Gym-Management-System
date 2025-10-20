@@ -1,5 +1,5 @@
 import { db } from "../core/firebase";
-import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, orderBy } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where } from "firebase/firestore";
 import type { Bill, CreateBillRequest, BillingInfo } from "../../types/billing";
 
 const billsCol = collection(db, "bills");
@@ -52,9 +52,16 @@ export async function getBills(): Promise<BillingInfo[]> {
 
 export const getAllBills = async (): Promise<Bill[]> => {
     try {
-        const q = query(billsCol, orderBy("createdAt", "desc"));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ ...doc.data() as Bill, id: doc.id }));
+        // Remove orderBy to avoid index requirement - sort in memory instead
+        const snapshot = await getDocs(billsCol);
+        const bills = snapshot.docs.map(doc => ({ ...doc.data() as Bill, id: doc.id }));
+        
+        // Sort in memory by createdAt descending
+        return bills.sort((a, b) => {
+            const dateA = new Date(a.createdAt);
+            const dateB = new Date(b.createdAt);
+            return dateB.getTime() - dateA.getTime();
+        });
     } catch (error) {
         console.error("Error fetching bills:", error);
         throw error;
@@ -64,9 +71,17 @@ export const getAllBills = async (): Promise<Bill[]> => {
 // READ BY USER
 export const getUserBills = async (userId: string): Promise<Bill[]> => {
     try {
-        const q = query(billsCol, where("userId", "==", userId), orderBy("createdAt", "desc"));
+        // Remove orderBy to avoid composite index requirement
+        const q = query(billsCol, where("userId", "==", userId));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ ...doc.data() as Bill, id: doc.id }));
+        const bills = snapshot.docs.map(doc => ({ ...doc.data() as Bill, id: doc.id }));
+        
+        // Sort in memory instead of using Firestore orderBy
+        return bills.sort((a, b) => {
+            const dateA = new Date(a.createdAt);
+            const dateB = new Date(b.createdAt);
+            return dateB.getTime() - dateA.getTime();
+        });
     } catch (error) {
         console.error("Error fetching user bills:", error);
         throw error;
@@ -76,9 +91,17 @@ export const getUserBills = async (userId: string): Promise<Bill[]> => {
 // READ BY STATUS
 export const getBillsByStatus = async (status: string): Promise<Bill[]> => {
     try {
-        const q = query(billsCol, where("status", "==", status), orderBy("createdAt", "desc"));
+        // Remove orderBy to avoid composite index requirement
+        const q = query(billsCol, where("status", "==", status));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ ...doc.data() as Bill, id: doc.id }));
+        const bills = snapshot.docs.map(doc => ({ ...doc.data() as Bill, id: doc.id }));
+        
+        // Sort in memory instead of using Firestore orderBy
+        return bills.sort((a, b) => {
+            const dateA = new Date(a.createdAt);
+            const dateB = new Date(b.createdAt);
+            return dateB.getTime() - dateA.getTime();
+        });
     } catch (error) {
         console.error("Error fetching bills by status:", error);
         throw error;
@@ -143,14 +166,22 @@ export const getBillsDueSoon = async (daysAhead: number = 7): Promise<Bill[]> =>
         const futureDate = new Date();
         futureDate.setDate(futureDate.getDate() + daysAhead);
         
-        const q = query(
-            billsCol, 
-            where("status", "==", "pending"),
-            where("dueDate", "<=", futureDate),
-            orderBy("dueDate", "asc")
-        );
+        // Use simpler query to avoid composite index requirement
+        const q = query(billsCol, where("status", "==", "pending"));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ ...doc.data() as Bill, id: doc.id }));
+        const bills = snapshot.docs.map(doc => ({ ...doc.data() as Bill, id: doc.id }));
+        
+        // Filter and sort in memory
+        return bills
+            .filter(bill => {
+                const dueDate = new Date(bill.dueDate);
+                return dueDate <= futureDate;
+            })
+            .sort((a, b) => {
+                const dateA = new Date(a.dueDate);
+                const dateB = new Date(b.dueDate);
+                return dateA.getTime() - dateB.getTime();
+            });
     } catch (error) {
         console.error("Error fetching bills due soon:", error);
         throw error;

@@ -146,11 +146,17 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
                 </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 space-y-3 text-center">
                 <p className="text-sm text-gray-400">
                     Don't have an account?{" "}
                     <Link to="/register" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
                         Sign up
+                    </Link>
+                </p>
+                <p className="text-sm text-gray-400">
+                    Forgot your password?{" "}
+                    <Link to="/password-reset" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+                        Reset it here
                     </Link>
                 </p>
             </div>

@@ -8,6 +8,7 @@ import UnauthorizedPage from './pages/auth/UnauthorizedPage';
 import MemberDashboard from './pages/member/MemberDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import TrainerDashboard from './pages/trainer/TrainerDashboard';
+import UserDashboard from './pages/user/UserDashboard';
 
 function App() {
   return (
@@ -51,6 +52,12 @@ function App() {
                 <TrainerDashboard />
               </ProtectedRoute>
             } 
+          />
+
+          {/* User Dashboard - Anyone can access if logged in */}
+          <Route 
+            path="/user/dashboard" 
+            element={<UserDashboard />} 
           />
 
           {/* Default redirect to login */}

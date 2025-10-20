@@ -5,10 +5,12 @@ import { Button } from "../ui/button";
 import { AnimatedInput } from "../ui/input";
 import { registerUser } from "../../services/auth/authService";
 import { ensureUserRole } from "../../services/auth/roleService";
+import { createUserProfile } from "../../services/auth/userProfileService";
 
 interface RegisterFormValues {
 	fullName: string;
 	email: string;
+	phone: string;
 	password: string;
 	confirmPassword: string;
 }
@@ -20,6 +22,7 @@ interface RegisterFormProps {
 const DEFAULT_FORM_STATE: RegisterFormValues = {
 	fullName: "",
 	email: "",
+	phone: "",
 	password: "",
 	confirmPassword: "",
 };
@@ -46,6 +49,12 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 			newErrors.email = "Email is required";
 		} else if (!validateEmail(formData.email)) {
 			newErrors.email = "Please enter a valid email address";
+		}
+
+		if (!formData.phone.trim()) {
+			newErrors.phone = "Phone number is required";
+		} else if (formData.phone.trim().length < 10) {
+			newErrors.phone = "Please enter a valid phone number";
 		}
 
 		if (!formData.password) {
@@ -79,9 +88,15 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 
 		setIsSubmitting(true);
 		try {
+			// Split full name into first and last name
+			const nameParts = formData.fullName.trim().split(' ');
+			const firstName = nameParts[0] || '';
+			const lastName = nameParts.slice(1).join(' ') || '';
+
 			const payload = {
 				fullName: formData.fullName.trim(),
 				email: formData.email.trim(),
+				phone: formData.phone.trim(),
 				password: formData.password,
 			};
 
@@ -89,12 +104,23 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 			if (onRegister) {
 				await onRegister(payload);
 			} else {
+				// 1. Create Firebase Auth user
 				const user = await registerUser(payload.email, payload.password, payload.fullName);
-				// Assign default 'member' role to new user
+				
+				// 2. Assign default 'member' role
 				const userRole = await ensureUserRole(user.uid, 'member');
 				console.log("Registration successful! User role assigned:", userRole);
 				
-				// Redirect to member dashboard after successful registration
+				// 3. Create user profile document in Firestore
+				await createUserProfile(user.uid, {
+					firstName,
+					lastName,
+					email: payload.email,
+					phone: payload.phone
+				});
+				console.log("User profile created successfully");
+				
+				// 4. Redirect to member dashboard after successful registration
 				navigate('/member/dashboard');
 			}
 
@@ -138,6 +164,16 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 					/>
 
 					<AnimatedInput
+						label="Phone Number"
+						type="tel"
+						value={formData.phone}
+						onChange={handleChange("phone")}
+						error={errors.phone}
+						success={Boolean(formData.phone.trim().length >= 10 && !errors.phone)}
+						required
+					/>
+
+					<AnimatedInput
 						label="Password"
 						type="password"
 						value={formData.password}
@@ -167,17 +203,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onRegister }) => {
 				</Button>
 			</form>
 
-			<div className="mt-6 space-y-3 text-center">
+			<div className="mt-6 text-center">
 				<p className="text-sm text-gray-400">
 					Already have an account?{" "}
 					<Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
 						Sign in
-					</Link>
-				</p>
-				<p className="text-sm text-gray-400">
-					Forgot your password?{" "}
-					<Link to="/password-reset" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
-						Reset it here
 					</Link>
 				</p>
 			</div>

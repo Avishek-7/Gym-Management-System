@@ -16,5 +16,8 @@ export { getUserBills as getBillingUserBills } from './billing';
 // Notification Services
 export * from './notification';
 
+// Admin Services
+export * from './admin';
+
 // Reports and Analytics Services
 export * from './reports';

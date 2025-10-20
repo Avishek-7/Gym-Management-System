@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Bell } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { getUserBills } from '../../services/billing/billService';
 import type { Bill } from '../../types/billing';
@@ -8,13 +9,23 @@ interface DashboardProps {
   showQuickActions?: boolean;
   showStats?: boolean;
   limit?: number; // Number of recent bills to show
+  onBookClass?: () => void;
+  onViewProfile?: () => void;
+  onMakePayment?: () => void;
+  onGetSupport?: () => void;
+  onViewNotifications?: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   userId, 
   showQuickActions = true,
   showStats = true,
-  limit = 3
+  limit = 3,
+  onBookClass,
+  onViewProfile,
+  onMakePayment,
+  onGetSupport,
+  onViewNotifications
 }) => {
   const [recentBills, setRecentBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
@@ -202,8 +213,10 @@ const Dashboard: React.FC<DashboardProps> = ({
             <CardDescription className="text-gray-300">Common member tasks</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <button className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <button 
+                onClick={onBookClass}
+                className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -221,7 +234,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <span className="text-xs font-medium text-white">Book Class</span>
               </button>
 
-              <button className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all">
+              <button 
+                onClick={onViewProfile}
+                className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -239,7 +254,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <span className="text-xs font-medium text-white">Profile</span>
               </button>
 
-              <button className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all">
+              <button 
+                onClick={onMakePayment}
+                className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -257,7 +274,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <span className="text-xs font-medium text-white">Payments</span>
               </button>
 
-              <button className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all">
+              <button 
+                onClick={onGetSupport}
+                className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -273,6 +292,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                   />
                 </svg>
                 <span className="text-xs font-medium text-white">Support</span>
+              </button>
+              <button
+                onClick={onViewNotifications}
+                className="flex flex-col items-center justify-center p-4 border border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-500/10 transition-all"
+                aria-label="Notifications"
+              >
+                <Bell className="w-8 h-8 mb-2 text-gray-300" />
+                <span className="text-xs font-medium text-white">Notifications</span>
               </button>
             </div>
           </CardContent>

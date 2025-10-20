@@ -1,3 +1,5 @@
+import type { MemberPackageAssignment } from './package';
+
 export interface Member {
   id: string;
   firstName: string;
@@ -20,6 +22,8 @@ export interface Member {
     phone: string;
     relationship: string;
   };
+  // Fee Package Assignment
+  package?: MemberPackageAssignment;
   medicalConditions?: string[];
   profileImage?: string;
   lastVisit?: Date;
