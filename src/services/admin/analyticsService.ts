@@ -1,17 +1,7 @@
 import { getMembers } from "../member/memberService";
 import { getAllBills, getPendingBills } from "../billing/billService";
-import { db } from "../core/firebase";
-import { collection, getDocs } from "firebase/firestore";
 
-interface FirestoreUser {
-  id: string;
-  role?: string;
-  status?: string;
-  email?: string;
-  displayName?: string;
-  createdAt?: Date | string;
-  updatedAt?: Date | string;
-}
+// Note: Firestore 'users' collection types removed; we're not reading it in this service.
 
 export interface DashboardStats {
   totalMembers: number;
@@ -38,75 +28,24 @@ export interface PaymentStatusData {
   color: string;
 }
 
-/**
- * Get users from the users collection (where your actual admin/member data is stored)
- */
-const getUsersFromFirestore = async (): Promise<FirestoreUser[]> => {
-  try {
-    const usersCol = collection(db, "users");
-    const snapshot = await getDocs(usersCol);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FirestoreUser));
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    return [];
-  }
-};
+// Note: We previously attempted to read from a top-level 'users' collection for counts,
+// but this can trigger permission errors depending on Firestore rules. We now rely on the
+// 'members' collection as the canonical source for dashboard counts.
 
 /**
  * Fetch dashboard statistics from Firebase
  */
 export const getDashboardStats = async (): Promise<DashboardStats> => {
   try {
-    // Try to fetch from users collection first (where your admin/member are)
-    const users = await getUsersFromFirestore();
-    console.log("Users from Firestore:", users); // Debug log
-    console.log("User roles found:", users.map(u => ({ id: u.id, role: u.role, status: u.status }))); // Debug log
-    
-    // Count total members (exclude admin role)
-    const totalMembers = users.filter(user => 
-      user.role === 'member' || user.role === 'trainer'
-    ).length;
-    
-    // Count active members (those with active status or no status field means active)
-    const activeMembers = users.filter(user => 
-      (user.role === 'member' || user.role === 'trainer') &&
-      (!user.status || user.status === 'active')
-    ).length;
-
-    console.log(`Found ${totalMembers} total members, ${activeMembers} active members`); // Debug log
-
-    // If no users found, try the members collection as fallback
-    if (users.length === 0) {
-      const members = await getMembers();
-      console.log("Members from members collection:", members); // Debug log
-      const totalMembersFromCol = members.length;
-      const activeMembersFromCol = members.filter(member => 
-        member.status === 'active'
-      ).length;
-      
-      // Use members collection data if available
-      if (members.length > 0) {
-        const bills = await getAllBills();
-        const pendingBills = await getPendingBills();
-        
-        const revenue = bills
-          .filter(bill => bill.status === 'paid')
-          .reduce((total, bill) => total + (bill.totalAmount || bill.amount || 0), 0);
-
-        return {
-          totalMembers: totalMembersFromCol,
-          activeMembers: activeMembersFromCol,
-          revenue,
-          pendingBills: pendingBills.length,
-        };
-      }
-    }
+    // Use members collection as the canonical source for counts to avoid 'users' read permission issues
+    const members = await getMembers();
+    const totalMembers = members.length;
+    const activeMembers = members.filter(member => member.status === 'active').length;
 
     // Fetch all bills to calculate revenue and pending bills
     const bills = await getAllBills();
     const pendingBills = await getPendingBills();
-    
-    // Calculate total revenue from paid bills
+
     const revenue = bills
       .filter(bill => bill.status === 'paid')
       .reduce((total, bill) => total + (bill.totalAmount || bill.amount || 0), 0);
@@ -117,8 +56,7 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
       revenue,
       pendingBills: pendingBills.length,
     };
-  } catch (error) {
-    console.error("Error fetching dashboard stats:", error);
+  } catch {
     // Return default values on error
     return {
       totalMembers: 0,

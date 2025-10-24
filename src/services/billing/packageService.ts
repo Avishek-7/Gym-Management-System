@@ -4,22 +4,38 @@ import type { FeePackage, CreateFeePackageRequest, UpdateFeePackageRequest } fro
 
 const PACKAGES_COLLECTION = 'packages';
 
+// Utility to strip undefined values so Firestore doesn't reject the write
+const omitUndefined = <T extends Record<string, unknown>>(obj: T): T => {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) cleaned[key] = value;
+  }
+  return cleaned as T;
+};
+
 /**
  * Create a new fee package
  */
 export const createFeePackage = async (packageData: CreateFeePackageRequest): Promise<string> => {
   try {
     const packagesRef = collection(db, PACKAGES_COLLECTION);
-    const docRef = await addDoc(packagesRef, {
+    // Ensure we don't send undefined fields (e.g., maxMembers)
+    const payload = omitUndefined({
       ...packageData,
+      features: packageData.features ?? [],
       isActive: true,
       currentMembers: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    const docRef = await addDoc(packagesRef, payload);
     return docRef.id;
   } catch (error) {
     console.error('Error creating fee package:', error);
+    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+    if (code === 'permission-denied') {
+      throw new Error('Permission denied: your account cannot create packages. Ensure your user has role "admin" and Firestore rules allow admins to write to packages.');
+    }
     throw new Error('Failed to create fee package');
   }
 };
@@ -55,8 +71,18 @@ export const getFeePackages = async (activeOnly: boolean = false): Promise<FeePa
       } as FeePackage;
     });
   } catch (error) {
-    console.error('Error fetching fee packages:', error);
-    throw new Error('Failed to fetch fee packages');
+    // Be resilient in UI: return empty list on permission or transient errors.
+    // If permission denied, downgrade to a one-time warning to avoid noisy logs.
+    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+    if (code === 'permission-denied') {
+      if (!(globalThis as unknown as { __pkgPermWarnLogged?: boolean }).__pkgPermWarnLogged) {
+        console.warn('Fee packages read denied by Firestore rules. Returning empty list to keep UI responsive.');
+        (globalThis as unknown as { __pkgPermWarnLogged?: boolean }).__pkgPermWarnLogged = true;
+      }
+    } else {
+      console.error('Error fetching fee packages:', error);
+    }
+    return [] as FeePackage[];
   }
 };
 
@@ -102,12 +128,18 @@ export const updateFeePackage = async (
 ): Promise<void> => {
   try {
     const packageRef = doc(db, PACKAGES_COLLECTION, packageId);
-    await updateDoc(packageRef, {
+    // Remove undefined fields to avoid Firestore errors
+    const payload = omitUndefined({
       ...updates,
       updatedAt: serverTimestamp(),
     });
+    await updateDoc(packageRef, payload);
   } catch (error) {
     console.error('Error updating fee package:', error);
+    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+    if (code === 'permission-denied') {
+      throw new Error('Permission denied: your account cannot update packages. Ensure your user has role "admin" and Firestore rules allow admins to write to packages.');
+    }
     throw new Error('Failed to update fee package');
   }
 };
@@ -121,6 +153,10 @@ export const deleteFeePackage = async (packageId: string): Promise<void> => {
     await deleteDoc(packageRef);
   } catch (error) {
     console.error('Error deleting fee package:', error);
+    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+    if (code === 'permission-denied') {
+      throw new Error('Permission denied: your account cannot delete packages. Ensure your user has role "admin" and Firestore rules allow admins to write to packages.');
+    }
     throw new Error('Failed to delete fee package');
   }
 };
@@ -142,6 +178,10 @@ export const incrementPackageMembers = async (packageId: string): Promise<void> 
     }
   } catch (error) {
     console.error('Error incrementing package members:', error);
+    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+    if (code === 'permission-denied') {
+      throw new Error('Permission denied: cannot update package member count. Ensure admin write access to packages in Firestore rules.');
+    }
     throw new Error('Failed to increment package members');
   }
 };
@@ -163,6 +203,10 @@ export const decrementPackageMembers = async (packageId: string): Promise<void> 
     }
   } catch (error) {
     console.error('Error decrementing package members:', error);
+    const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: string }).code : undefined;
+    if (code === 'permission-denied') {
+      throw new Error('Permission denied: cannot update package member count. Ensure admin write access to packages in Firestore rules.');
+    }
     throw new Error('Failed to decrement package members');
   }
 };

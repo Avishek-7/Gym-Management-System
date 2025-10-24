@@ -310,6 +310,73 @@ service cloud.firestore {
     }
     
     // ========================================
+    // PACKAGES COLLECTION (FEE PACKAGES)
+    // ========================================
+    
+    match /packages/{packageId} {
+      // All authenticated users can read packages
+      allow read: if isAuthenticated();
+      
+      // Only admins can create, update, or delete packages
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // GYM CLASSES COLLECTION
+    // ========================================
+    
+    match /gymClasses/{classId} {
+      // All authenticated users can read gym classes
+      allow read: if isAuthenticated();
+      
+      // Admins and trainers can create, update classes
+      allow create: if isAdmin() || isTrainer();
+      allow update: if isAdmin() || isTrainer();
+      
+      // Only admins can delete classes
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // CLASS SESSIONS COLLECTION
+    // ========================================
+    
+    match /classSessions/{sessionId} {
+      // All authenticated users can read class sessions
+      allow read: if isAuthenticated();
+      
+      // Admins and trainers can create, update sessions
+      allow create: if isAdmin() || isTrainer();
+      allow update: if isAdmin() || isTrainer();
+      
+      // Only admins can delete sessions
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // CLASS ATTENDANCE COLLECTION
+    // ========================================
+    
+    match /classAttendance/{attendanceId} {
+      // Admins and trainers can read all attendance
+      // Members can only read their own attendance
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        isTrainer() || 
+        resource.data.memberId == request.auth.uid
+      );
+      
+      // Admins and trainers can create/update attendance
+      allow create: if isAdmin() || isTrainer();
+      allow update: if isAdmin() || isTrainer();
+      
+      // Only admins can delete attendance records
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
     // USER PROFILES COLLECTION
     // ========================================
     

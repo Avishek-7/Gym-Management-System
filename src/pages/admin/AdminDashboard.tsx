@@ -4,6 +4,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import Background from '../../components/common/Background';
 import LogoutButton from '../../components/common/LogoutButton';
+import { PermissionsDiagnostics } from '../../components/admin/PermissionsDiagnostics';
+import { MemberSelector } from '../../components/admin/MemberSelector';
 import { 
   getDashboardStats, 
   getRevenueData, 
@@ -585,7 +587,20 @@ const AdminDashboard: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      await createFeePackage(packageFormData as CreateFeePackageRequest);
+      // Normalize values: ensure non-negative numbers and keep 0 allowed for maxMembers
+      const normalized: CreateFeePackageRequest = {
+        name: packageFormData.name || '',
+        description: packageFormData.description || '',
+        price: Math.max(0, Number(packageFormData.price ?? 0)),
+        duration: Math.max(1, Number(packageFormData.duration ?? 1)),
+        category: (packageFormData.category || 'basic') as 'basic' | 'standard' | 'premium' | 'vip',
+        features: (packageFormData.features || []).filter(Boolean) as string[],
+        ...(packageFormData.maxMembers !== undefined
+          ? { maxMembers: Math.max(0, Number(packageFormData.maxMembers)) }
+          : {}),
+      };
+
+      await createFeePackage(normalized);
       alert('Package created successfully!');
       closeAddPackageModal();
       
@@ -598,7 +613,8 @@ const AdminDashboard: React.FC = () => {
       setAvailablePackages(activePackages);
     } catch (error) {
       console.error('Error creating package:', error);
-      alert('Failed to create package. Please try again.');
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to create package. ${msg}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -624,7 +640,17 @@ const AdminDashboard: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await updateFeePackage(selectedPackage.id, packageFormData);
+      const updates: Partial<CreateFeePackageRequest> = {
+        ...(packageFormData.name !== undefined ? { name: packageFormData.name } : {}),
+        ...(packageFormData.description !== undefined ? { description: packageFormData.description } : {}),
+        ...(packageFormData.price !== undefined ? { price: Math.max(0, Number(packageFormData.price)) } : {}),
+        ...(packageFormData.duration !== undefined ? { duration: Math.max(1, Number(packageFormData.duration)) } : {}),
+        ...(packageFormData.category !== undefined ? { category: packageFormData.category as 'basic' | 'standard' | 'premium' | 'vip' } : {}),
+        ...(packageFormData.features !== undefined ? { features: (packageFormData.features || []).filter(Boolean) as string[] } : {}),
+        ...(packageFormData.maxMembers !== undefined ? { maxMembers: Math.max(0, Number(packageFormData.maxMembers)) } : {}),
+      };
+
+      await updateFeePackage(selectedPackage.id, updates);
       alert('Package updated successfully!');
       setIsEditPackageOpen(false);
       
@@ -637,7 +663,8 @@ const AdminDashboard: React.FC = () => {
       setAvailablePackages(activePackages);
     } catch (error) {
       console.error('Error updating package:', error);
-      alert('Failed to update package. Please try again.');
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to update package. ${msg}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -751,6 +778,12 @@ const AdminDashboard: React.FC = () => {
           subtitle="Gym management overview and analytics"
           headerActions={<LogoutButton />}
         >
+          {/* Info: Packages visibility */}
+          {availablePackages.length === 0 && (
+            <div className="mb-4 p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm">
+              No active packages found or insufficient permissions to read the packages collection. If you expect packages here, review Firestore security rules to allow reads.
+            </div>
+          )}
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Total Members */}
@@ -1040,6 +1073,9 @@ const AdminDashboard: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Permissions Diagnostics */}
+      <PermissionsDiagnostics />
+
       {/* Add Member Modal */}
       <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
         <DialogContent className="bg-gray-900/95 border-white/20 backdrop-blur-md max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1188,6 +1224,14 @@ const AdminDashboard: React.FC = () => {
             {/* Membership Details */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-white border-b border-gray-700 pb-2">Membership Details</h3>
+              
+              <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg mb-4">
+                <p className="text-sm text-blue-300">
+                  <strong>Note:</strong> Membership ID is the gym member number (e.g., MEM-001). 
+                  User ID is optional - leave blank if this member doesn't have a login account yet.
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1201,19 +1245,34 @@ const AdminDashboard: React.FC = () => {
                     className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                     placeholder="MEM-001"
                   />
+                  <p className="text-xs text-gray-400 mt-1">Gym membership number for identification</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => handleInputChange('status', e.target.value)}
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    User ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.userId || ''}
+                    onChange={(e) => handleInputChange('userId', e.target.value)}
                     className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
+                    placeholder="Firebase Auth UID"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Links to user account for billing</p>
                 </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => handleInputChange('status', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="suspended">Suspended</option>
+                </select>
               </div>
             </div>
 
@@ -1349,35 +1408,30 @@ const AdminDashboard: React.FC = () => {
           <form onSubmit={handleCreateBill} className="space-y-6">
             {/* Member Details */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-white border-b border-gray-700 pb-2">Member Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    User ID <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={billFormData.userId}
-                    onChange={(e) => handleBillInputChange('userId', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
-                    placeholder="member-user-id"
-                  />
+              <h3 className="text-lg font-semibold text-white border-b border-gray-700 pb-2">Select Member</h3>
+              
+              <MemberSelector 
+                onSelect={(userId, membershipId) => {
+                  setBillFormData(prev => ({
+                    ...prev,
+                    userId,
+                    membershipId
+                  }));
+                }}
+                selectedMembershipId={billFormData.membershipId}
+              />
+
+              {billFormData.userId && (
+                <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                  <p className="text-sm text-purple-300">
+                    <strong>Selected:</strong>
+                    <br />
+                    User ID: <code className="bg-gray-800/50 px-1 rounded">{billFormData.userId}</code>
+                    <br />
+                    Membership ID: <code className="bg-gray-800/50 px-1 rounded">{billFormData.membershipId}</code>
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Membership ID <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={billFormData.membershipId}
-                    onChange={(e) => handleBillInputChange('membershipId', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
-                    placeholder="MEM-001"
-                  />
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Bill Items */}
@@ -2313,9 +2367,9 @@ const AdminDashboard: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  min="1"
-                  value={packageFormData.maxMembers || ''}
-                  onChange={(e) => setPackageFormData({...packageFormData, maxMembers: e.target.value ? parseInt(e.target.value) : undefined})}
+                  min="0"
+                  value={packageFormData.maxMembers ?? ''}
+                  onChange={(e) => setPackageFormData({...packageFormData, maxMembers: e.target.value !== '' ? parseInt(e.target.value) : undefined})}
                   className="w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
                   placeholder="Leave empty for unlimited"
                 />
@@ -2472,9 +2526,9 @@ const AdminDashboard: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  min="1"
-                  value={packageFormData.maxMembers || ''}
-                  onChange={(e) => setPackageFormData({...packageFormData, maxMembers: e.target.value ? parseInt(e.target.value) : undefined})}
+                  min="0"
+                  value={packageFormData.maxMembers ?? ''}
+                  onChange={(e) => setPackageFormData({...packageFormData, maxMembers: e.target.value !== '' ? parseInt(e.target.value) : undefined})}
                   className="w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
                   placeholder="Leave empty for unlimited"
                 />

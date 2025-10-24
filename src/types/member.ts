@@ -1,7 +1,8 @@
 import type { MemberPackageAssignment } from './package';
 
 export interface Member {
-  id: string;
+  id: string; // Firestore document ID
+  userId?: string; // Firebase Auth UID - links to user account (optional for admin-created members without accounts)
   firstName: string;
   lastName: string;
   email: string;
@@ -14,7 +15,7 @@ export interface Member {
     zipCode: string;
     country: string;
   };
-  membershipId: string;
+  membershipId: string; // Gym membership number (e.g., "MEM-001")
   joinDate: Date;
   status: 'active' | 'inactive' | 'suspended';
   emergencyContact: {
