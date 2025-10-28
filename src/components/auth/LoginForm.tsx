@@ -65,7 +65,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
             } else {
                 const user = await loginUser(formData.email, formData.password);
                 // Ensure user has a role assigned (creates default 'member' role if none exists)
-                const userRole = await ensureUserRole(user.uid);
+                const userRole = await ensureUserRole(user.uid, undefined, { email: user.email || formData.email });
                 console.log("Login successful! User role:", userRole);
                 
                 // Redirect based on user role

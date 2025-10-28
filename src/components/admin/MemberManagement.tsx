@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/form-input';
 import { addMember, getMembers, updateMember, deleteMember } from '../../services/member/memberService';
 import type { Member } from '../../types/member';
+import { getAllUsers, checkUserHasMemberProfile, type FirebaseUser } from '../../services/user/userService';
 import {
   Card,
   CardContent,
@@ -12,6 +13,13 @@ import {
   CardHeader,
   CardTitle,
 } from '../ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 import {
   Select,
   SelectContent,
@@ -78,6 +86,15 @@ const MemberManagement: FC = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // User selection state
+  const [showUserSelector, setShowUserSelector] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<FirebaseUser[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<FirebaseUser[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+
   const statusOptions = useMemo(() => ['active', 'inactive', 'suspended'] as const, []);
 
   useEffect(() => {
@@ -96,6 +113,73 @@ const MemberManagement: FC = () => {
     }
   };
 
+  const loadAvailableUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const users = await getAllUsers();
+      
+      // Filter out users who already have member profiles
+      const usersWithoutProfiles = await Promise.all(
+        users.map(async (user) => {
+          const hasMemberProfile = await checkUserHasMemberProfile(user.id);
+          return hasMemberProfile ? null : user;
+        })
+      );
+      
+      const availableUsersList = usersWithoutProfiles.filter((user): user is FirebaseUser => user !== null);
+      setAvailableUsers(availableUsersList);
+      setFilteredUsers(availableUsersList);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleOpenUserSelector = () => {
+    setShowUserSelector(true);
+    loadAvailableUsers();
+  };
+
+  const handleCloseUserSelector = () => {
+    setShowUserSelector(false);
+    setSearchQuery('');
+    setSelectedUserId(null);
+  };
+
+  const handleSearchUsers = (query: string) => {
+    setSearchQuery(query);
+    const filtered = availableUsers.filter(
+      (user) =>
+        user.email.toLowerCase().includes(query.toLowerCase()) ||
+        user.id.toLowerCase().includes(query.toLowerCase())
+    );
+    setFilteredUsers(filtered);
+  };
+
+  const handleSelectUser = (userId: string) => {
+    setSelectedUserId(userId);
+  };
+
+  const handleProceedWithSelectedUser = () => {
+    if (selectedUserId) {
+      const selectedUser = availableUsers.find(u => u.id === selectedUserId);
+      if (selectedUser) {
+        setFormState(prev => ({
+          ...prev,
+          email: selectedUser.email,
+        }));
+      }
+      setShowUserSelector(false);
+      setShowAddForm(true);
+    }
+  };
+
+  const handleAddMemberWithoutUser = () => {
+    setSelectedUserId(null);
+    setShowAddForm(true);
+  };
+
   const handleFieldErrorClear = (field: string) => {
     setErrors((prev) => {
       if (!prev[field]) {
@@ -111,6 +195,8 @@ const MemberManagement: FC = () => {
     setFormState(createEmptyFormState());
     setEditingMember(null);
     setErrors({});
+    setSelectedUserId(null);
+    setShowAddForm(false);
   };
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -179,6 +265,7 @@ const MemberManagement: FC = () => {
       const now = new Date();
       
       const memberData: Omit<Member, 'id'> = {
+        userId: selectedUserId || undefined, // Link to Firebase Auth user if selected
         firstName: formState.firstName.trim(),
         lastName: formState.lastName.trim(),
         email: formState.email.trim(),
@@ -265,18 +352,138 @@ const MemberManagement: FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{isEditing ? 'Update Member' : 'Add Member'}</CardTitle>
-          <CardDescription>
-            {isEditing
-              ? 'Modify the selected member’s details and save your changes.'
-              : 'Register a new member by providing their basic information.'}
-          </CardDescription>
-        </CardHeader>
+      {/* User Selector Dialog */}
+      <Dialog open={showUserSelector} onOpenChange={setShowUserSelector}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Select a User</DialogTitle>
+            <DialogDescription>
+              Choose an existing Firebase user to create a member profile for, or skip to add a member without a user account.
+            </DialogDescription>
+          </DialogHeader>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-4 mt-4">
+            {/* Search Input */}
+            <div>
+              <Input
+                placeholder="Search by email or user ID..."
+                value={searchQuery}
+                onChange={(e) => handleSearchUsers(e.target.value)}
+                className="w-full"
+              />
+            </div>
+
+            {/* Loading State */}
+            {loadingUsers && (
+              <div className="flex justify-center py-8">
+                <div className="text-sm text-muted-foreground">Loading users...</div>
+              </div>
+            )}
+
+            {/* Users List */}
+            {!loadingUsers && filteredUsers.length > 0 && (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {filteredUsers.map((user) => (
+                  <div
+                    key={user.id}
+                    onClick={() => handleSelectUser(user.id)}
+                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                      selectedUserId === user.id
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{user.email}</p>
+                        <p className="text-sm text-muted-foreground">
+                          ID: {user.id} • Role: {user.role}
+                        </p>
+                      </div>
+                      {selectedUserId === user.id && (
+                        <div className="text-primary">✓</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!loadingUsers && filteredUsers.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                {searchQuery
+                  ? 'No users found matching your search.'
+                  : 'All users already have member profiles.'}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-4 border-t">
+              <Button
+                onClick={handleProceedWithSelectedUser}
+                disabled={!selectedUserId}
+                className="flex-1"
+              >
+                Continue with Selected User
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleAddMemberWithoutUser}
+                className="flex-1"
+              >
+                Add Member Without User
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleCloseUserSelector}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Member Button (shown when form is not visible) */}
+      {!showAddForm && !editingMember && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Add New Member</CardTitle>
+            <CardDescription>
+              Create a member profile from an existing user account or add a new member manually.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={handleOpenUserSelector}>
+              Select User to Create Member
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Member Form (shown when adding/editing) */}
+      {(showAddForm || editingMember) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{isEditing ? 'Update Member' : 'Add Member'}</CardTitle>
+            <CardDescription>
+              {isEditing && 'Modify the selected member\'s details and save your changes.'}
+              {!isEditing && selectedUserId && `Creating member profile for user: ${formState.email}`}
+              {!isEditing && !selectedUserId && 'Register a new member by providing their basic information.'}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            {selectedUserId && !isEditing && (
+              <div className="mb-6 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+                <p className="text-sm font-medium">Linked User Account</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  This member profile will be linked to user: <span className="font-mono">{selectedUserId}</span>
+                </p>
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="space-y-6">
             {/* Personal Information */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Personal Information</h3>
@@ -321,7 +528,7 @@ const MemberManagement: FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium" htmlFor="email">
-                    Email
+                    Email {selectedUserId && <span className="text-muted-foreground text-xs">(from user account)</span>}
                   </label>
                   <Input
                     id="email"
@@ -330,6 +537,7 @@ const MemberManagement: FC = () => {
                     value={formState.email}
                     onChange={handleInputChange}
                     placeholder="john.doe@example.com"
+                    disabled={Boolean(selectedUserId)}
                     aria-describedby={errors.email ? "email-error" : undefined}
                   />
                   {errors.email && (
@@ -611,17 +819,16 @@ const MemberManagement: FC = () => {
                 {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Member'}
               </Button>
 
-              {isEditing && (
+              {(isEditing || showAddForm) && (
                 <Button type="button" variant="outline" onClick={resetForm}>
-                  Cancel Editing
+                  {isEditing ? 'Cancel Editing' : 'Cancel'}
                 </Button>
               )}
             </CardFooter>
           </form>
         </CardContent>
-
-
       </Card>
+      )}
 
       <Card>
         <CardHeader>

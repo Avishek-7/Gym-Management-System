@@ -4,7 +4,7 @@ import DarkVeil from "../../components/common/Background";
 
 const RegisterPage: React.FC = () => {
     return (
-        <div className="relative min-h-screen w-screen flex items-center justify-center overflow-hidden">
+        <div className="relative min-h-screen w-screen flex items-center justify-center overflow-hidden bg-gray-950">
             <div className="absolute inset-0 w-screen h-screen">
                 <DarkVeil />
             </div>

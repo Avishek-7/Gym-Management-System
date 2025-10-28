@@ -88,6 +88,7 @@ export const getUserRole = async (userId: string): Promise<UserRole | null> => {
 export interface AssignRoleOptions {
 	assignedBy?: string;
 	assignedAt?: Date;
+	email?: string; // Add email to be stored with the role
 }
 
 export const assignUserRole = async (
@@ -103,15 +104,18 @@ export const assignUserRole = async (
 		throw new Error(`Invalid role: ${role}`);
 	}
 
-	await setDoc(
-		roleDoc(userId),
-		{
-			role,
-			assignedBy: options.assignedBy ?? null,
-			assignedAt: options.assignedAt ?? serverTimestamp(),
-		},
-		{ merge: true },
-	);
+	const roleData: Record<string, unknown> = {
+		role,
+		assignedBy: options.assignedBy ?? null,
+		assignedAt: options.assignedAt ?? serverTimestamp(),
+	};
+
+	// Include email if provided
+	if (options.email) {
+		roleData.email = options.email;
+	}
+
+	await setDoc(roleDoc(userId), roleData, { merge: true });
 };
 
 export const ensureUserRole = async (

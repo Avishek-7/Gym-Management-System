@@ -201,6 +201,110 @@ service cloud.firestore {
     }
     
     // ========================================
+    // NOTIFICATION TEMPLATES COLLECTION
+    // ========================================
+    
+    match /notificationTemplates/{templateId} {
+      // All authenticated users can read templates
+      allow read: if isAuthenticated();
+      
+      // Only admins can create, update, or delete templates
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // NOTIFICATION PREFERENCES COLLECTION
+    // ========================================
+    
+    match /notificationPreferences/{preferenceId} {
+      // Users can read their own preferences
+      // Admins can read any preferences
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Users can create/update their own preferences
+      // Admins can create/update any preferences
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Only admins can delete preferences
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // SCHEDULED NOTIFICATIONS COLLECTION
+    // ========================================
+    
+    match /scheduledNotifications/{scheduledId} {
+      // Admins can read all scheduled notifications
+      // Users can read their own scheduled notifications
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Only admins can create, update, or delete scheduled notifications
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // SUPPLEMENTS COLLECTION
+    // ========================================
+    
+    match /supplements/{supplementId} {
+      // All authenticated users can read supplements
+      allow read: if isAuthenticated();
+      
+      // Only admins can create, update, or delete supplements
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // SUPPLEMENT SALES COLLECTION
+    // ========================================
+    
+    match /supplementSales/{saleId} {
+      // Admins can read all sales
+      // Members can only read their own sales
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.memberId == request.auth.uid
+      );
+      
+      // Only admins can create, update, or delete sales
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // SUPPLEMENT STOCK HISTORY COLLECTION
+    // ========================================
+    
+    match /supplementStockHistory/{historyId} {
+      // Only admins can read stock history
+      allow read: if isAdmin();
+      
+      // Only admins can create stock history records
+      allow create: if isAdmin();
+      
+      // Stock history records should not be updated or deleted
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ========================================
     // CLASSES COLLECTION
     // ========================================
     
@@ -400,6 +504,90 @@ service cloud.firestore {
       );
       
       // Only admins can delete profiles
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // DIET PLANS COLLECTION
+    // ========================================
+    
+    match /dietPlans/{planId} {
+      // Admins can read all diet plans
+      // Members can only read their own diet plans
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.memberId == request.auth.uid
+      );
+      
+      // Only admins can create, update, or delete diet plans
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // DIET PROGRESS COLLECTION
+    // ========================================
+    
+    match /dietProgress/{progressId} {
+      // Admins can read all diet progress
+      // Members can only read their own diet progress
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.memberId == request.auth.uid
+      );
+      
+      // Admins can create/update diet progress
+      // Members can create/update their own progress
+      allow create: if isAuthenticated() && (
+        isAdmin() || 
+        request.resource.data.memberId == request.auth.uid
+      );
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.memberId == request.auth.uid
+      );
+      
+      // Only admins can delete diet progress
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // DIET TEMPLATES COLLECTION
+    // ========================================
+    
+    match /dietTemplates/{templateId} {
+      // All authenticated users can read public templates
+      // Admins can read all templates
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.isPublic == true
+      );
+      
+      // Only admins can create, update, or delete templates
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // PENDING APPROVALS COLLECTION
+    // ========================================
+    
+    match /pendingApprovals/{approvalId} {
+      // Admins can read all approval requests
+      // Users can read their own approval requests
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid
+      );
+      
+      // Users can create approval requests for themselves
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Only admins can update (approve/reject) or delete approval requests
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
