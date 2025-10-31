@@ -309,13 +309,17 @@ service cloud.firestore {
     // ========================================
     
     match /classes/{classId} {
-      // All authenticated users can read classes
-      allow read: if isAuthenticated();
-      
+      // Members: only read classes they're enrolled in
+      // Trainers: only read classes assigned to them
+      // Admins: full access
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (isMember() && exists(/databases/$(database)/documents/classEnrollments/$(request.auth.uid + '_' + classId))) ||
+        (isTrainer() && resource.data.trainerId == request.auth.uid)
+      );
       // Admins and trainers can create, update classes
       allow create: if isAdmin() || isTrainer();
       allow update: if isAdmin() || isTrainer();
-      
       // Only admins can delete classes
       allow delete: if isAdmin();
     }
@@ -432,15 +436,40 @@ service cloud.firestore {
     // ========================================
     
     match /gymClasses/{classId} {
-      // All authenticated users can read gym classes
-      allow read: if isAuthenticated();
-      
+      // Members: only read gym classes they're enrolled in
+      // Trainers: only read gym classes assigned to them
+      // Admins: full access
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (isMember() && exists(/databases/$(database)/documents/classEnrollments/$(request.auth.uid + '_' + classId))) ||
+        (isTrainer() && resource.data.trainerId == request.auth.uid)
+      );
       // Admins and trainers can create, update classes
       allow create: if isAdmin() || isTrainer();
       allow update: if isAdmin() || isTrainer();
-      
       // Only admins can delete classes
       allow delete: if isAdmin();
+    // ========================================
+    // CLASS ENROLLMENTS COLLECTION
+    // ========================================
+    match /classEnrollments/{enrollmentId} {
+      // Members: only read their own enrollments
+      // Trainers: can read enrollments for their assigned classes
+      // Admins: full access
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (isMember() && resource.data.userId == request.auth.uid) ||
+        (isTrainer() && resource.data.trainerId == request.auth.uid)
+      );
+      // Members: can create/unenroll themselves
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        (isMember() && request.resource.data.userId == request.auth.uid)
+      );
+      // Only admins can update/delete enrollments
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
     }
     
     // ========================================
@@ -448,13 +477,17 @@ service cloud.firestore {
     // ========================================
     
     match /classSessions/{sessionId} {
-      // All authenticated users can read class sessions
-      allow read: if isAuthenticated();
-      
+      // Members: only read sessions for classes they're enrolled in
+      // Trainers: only read sessions for their assigned classes
+      // Admins: full access
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (isMember() && exists(/databases/$(database)/documents/classEnrollments/$(request.auth.uid + '_' + resource.data.classId))) ||
+        (isTrainer() && resource.data.trainerId == request.auth.uid)
+      );
       // Admins and trainers can create, update sessions
       allow create: if isAdmin() || isTrainer();
       allow update: if isAdmin() || isTrainer();
-      
       // Only admins can delete sessions
       allow delete: if isAdmin();
     }

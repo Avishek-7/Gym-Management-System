@@ -25,6 +25,7 @@ import type {
   UpdatePreferencesRequest,
   CreateScheduledNotificationRequest
 } from '../../types/notification';
+import { logger } from '../../utils/logger';
 
 // Helper function to convert Firestore timestamp to Date
 const convertTimestamp = (timestamp: Timestamp | Date | undefined): Date | undefined => {
@@ -35,6 +36,14 @@ const convertTimestamp = (timestamp: Timestamp | Date | undefined): Date | undef
 
 // Notification CRUD Operations
 export const createNotification = async (request: CreateNotificationRequest): Promise<string> => {
+  logger.info('Creating notification', {
+    service: 'notificationService',
+    action: 'createNotification',
+    userId: request.userId,
+    type: request.type,
+    channels: request.channels
+  });
+
   try {
     const notificationData = {
       ...request,
@@ -48,10 +57,27 @@ export const createNotification = async (request: CreateNotificationRequest): Pr
       updatedAt: new Date()
     };
 
+    logger.logFirebaseOperation('create', 'notifications', {
+      userId: request.userId,
+      type: request.type
+    });
+
     const docRef = await addDoc(collection(db, 'notifications'), notificationData);
+    
+    logger.info('Notification created successfully', {
+      service: 'notificationService',
+      notificationId: docRef.id,
+      userId: request.userId,
+      type: request.type
+    });
+    
     return docRef.id;
   } catch (error) {
-    console.error('Error creating notification:', error);
+    logger.error('Failed to create notification', error, {
+      service: 'notificationService',
+      action: 'createNotification',
+      userId: request.userId
+    });
     throw new Error('Failed to create notification');
   }
 };
@@ -81,7 +107,16 @@ export const getNotification = async (id: string): Promise<Notification | null> 
 };
 
 export const getUserNotifications = async (userId: string, limitCount: number = 50): Promise<Notification[]> => {
+  logger.debug('Fetching user notifications', {
+    service: 'notificationService',
+    action: 'getUserNotifications',
+    userId,
+    limit: limitCount
+  });
+
   try {
+    logger.logFirebaseOperation('query', 'notifications', { userId, limit: limitCount });
+    
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
@@ -90,7 +125,7 @@ export const getUserNotifications = async (userId: string, limitCount: number = 
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
+    const notifications = querySnapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -102,22 +137,49 @@ export const getUserNotifications = async (userId: string, limitCount: number = 
         updatedAt: convertTimestamp(data.updatedAt) || new Date(),
       } as Notification;
     });
+
+    logger.info('User notifications fetched successfully', {
+      service: 'notificationService',
+      userId,
+      count: notifications.length
+    });
+
+    return notifications;
   } catch (error) {
-    console.error('Error getting user notifications:', error);
+    logger.error('Failed to fetch user notifications', error, {
+      service: 'notificationService',
+      action: 'getUserNotifications',
+      userId
+    });
     throw new Error('Failed to get user notifications');
   }
 };
 
 export const markNotificationAsRead = async (id: string): Promise<void> => {
+  logger.info('Marking notification as read', {
+    service: 'notificationService',
+    action: 'markNotificationAsRead',
+    notificationId: id
+  });
+
   try {
+    logger.logFirebaseOperation('update', 'notifications', { notificationId: id });
     const docRef = doc(db, 'notifications', id);
     await updateDoc(docRef, {
       status: 'read',
       readAt: new Date(),
       updatedAt: new Date()
     });
+    
+    logger.info('Notification marked as read', {
+      service: 'notificationService',
+      notificationId: id
+    });
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    logger.error('Failed to mark notification as read', error, {
+      service: 'notificationService',
+      notificationId: id
+    });
     throw new Error('Failed to mark notification as read');
   }
 };

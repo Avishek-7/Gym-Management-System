@@ -67,3 +67,12 @@ export interface TrainerClass extends GymClass {
   totalSessions?: number;
   averageAttendance?: number;
 }
+
+export interface ClassEnrollment {
+  id: string;
+  classId: string;
+  userId?: string; // Firebase Auth UID when available
+  memberId?: string; // Fallback to member doc id if no user account
+  enrolledAt: Date | string;
+  status: 'active' | 'cancelled';
+}

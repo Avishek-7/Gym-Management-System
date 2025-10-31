@@ -10,6 +10,7 @@ import Attendance from '../../components/trainer/Attendance';
 import MemberProgress from '../../components/trainer/MemberProgress';
 import TrainerNotifications from '../../components/trainer/TrainerNotifications';
 import TrainerProfile from '../../components/trainer/TrainerProfile';
+import ChatBot from '../../components/ai/chatBot';
 
 const TrainerDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -84,6 +85,9 @@ const TrainerDashboard: React.FC = () => {
           </div>
         </Layout>
       </div>
+
+      {/* AI ChatBot */}
+      <ChatBot />
     </div>
   );
 };

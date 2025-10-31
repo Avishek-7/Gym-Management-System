@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../core/firebase';
 import type { GymClass, TrainerClass, ClassSession, ClassAttendance, CreateClassRequest } from '../../types/class';
+import { logger } from '../../utils/logger';
 
 const CLASSES_COLLECTION = 'gymClasses';
 const SESSIONS_COLLECTION = 'classSessions';
@@ -38,12 +39,18 @@ const convertTimestamp = (timestamp: unknown): Date => {
  * Get all classes assigned to a specific trainer
  */
 export const getTrainerClasses = async (trainerId: string): Promise<TrainerClass[]> => {
+  logger.debug('Fetching trainer classes', {
+    service: 'classService',
+    action: 'getTrainerClasses',
+    trainerId
+  });
+
   try {
+    logger.logFirebaseOperation('query', 'gymClasses', { trainerId });
     const q = query(
       collection(db, CLASSES_COLLECTION),
       where('trainerId', '==', trainerId),
-      where('isActive', '==', true),
-      orderBy('name', 'asc')
+      where('isActive', '==', true)
     );
     
     const snapshot = await getDocs(q);
@@ -57,9 +64,22 @@ export const getTrainerClasses = async (trainerId: string): Promise<TrainerClass
       } as TrainerClass);
     }
     
-    return classes;
+    // Sort by name client-side to avoid requiring a composite index
+    const sortedClasses = classes.sort((a, b) => a.name.localeCompare(b.name));
+    
+    logger.info('Trainer classes fetched successfully', {
+      service: 'classService',
+      trainerId,
+      count: sortedClasses.length
+    });
+    
+    return sortedClasses;
   } catch (error) {
-    console.error('Error fetching trainer classes:', error);
+    logger.error('Failed to fetch trainer classes', error, {
+      service: 'classService',
+      action: 'getTrainerClasses',
+      trainerId
+    });
     throw new Error('Failed to fetch classes');
   }
 };
@@ -87,9 +107,40 @@ export const getClassById = async (classId: string): Promise<GymClass | null> =>
 };
 
 /**
+ * Get all active classes for members to browse/book
+ */
+export const getActiveClasses = async (): Promise<GymClass[]> => {
+  try {
+    const q = query(
+      collection(db, CLASSES_COLLECTION),
+      where('isActive', '==', true)
+    );
+
+    const snapshot = await getDocs(q);
+    const classes = snapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+    })) as GymClass[];
+    
+    // Sort by name client-side to avoid requiring a composite index
+    return classes.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    console.error('Error fetching active classes:', error);
+    throw new Error('Failed to fetch classes');
+  }
+};
+
+/**
  * Create a new class
  */
 export const createClass = async (classData: CreateClassRequest & { trainerId: string, trainerName: string }): Promise<string> => {
+  logger.info('Creating new class', {
+    service: 'classService',
+    action: 'createClass',
+    className: classData.name,
+    trainerId: classData.trainerId
+  });
+
   try {
     const newClass = {
       ...classData,
@@ -99,10 +150,26 @@ export const createClass = async (classData: CreateClassRequest & { trainerId: s
       updatedAt: Timestamp.now(),
     };
     
+    logger.logFirebaseOperation('create', 'gymClasses', {
+      className: classData.name,
+      trainerId: classData.trainerId
+    });
+    
     const docRef = await addDoc(collection(db, CLASSES_COLLECTION), newClass);
+    
+    logger.info('Class created successfully', {
+      service: 'classService',
+      classId: docRef.id,
+      className: classData.name
+    });
+    
     return docRef.id;
   } catch (error) {
-    console.error('Error creating class:', error);
+    logger.error('Failed to create class', error, {
+      service: 'classService',
+      action: 'createClass',
+      className: classData.name
+    });
     throw new Error('Failed to create class');
   }
 };

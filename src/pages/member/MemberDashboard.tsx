@@ -16,13 +16,18 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'fireb
 import type { Member } from '../../types/member';
 import type { Bill } from '../../types/billing';
 import { Calendar, User as UserIcon, CreditCard, HelpCircle, Clock, Check } from 'lucide-react';
+import type { GymClass as GymClassModel, ClassSession } from '../../types/class';
+import { getEnrolledClassesForUser } from '../../services/fitness/enrollmentService';
+import { getClassSessions } from '../../services/fitness/classService';
+import ChatBot from '../../components/ai/chatBot';
 
-interface GymClass {
+// UI model tailored for the booking card
+interface UIAvailableClass {
   id: string;
   name: string;
   instructor: string;
-  time: string;
-  duration: string;
+  time: string; // human-friendly schedule summary
+  duration: string; // e.g., "60 min"
   capacity: number;
   enrolled: number;
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
@@ -68,13 +73,76 @@ const MemberDashboard: React.FC = () => {
   });
 
   // Class booking
-  const [availableClasses] = useState<GymClass[]>([
-    { id: '1', name: 'Yoga Flow', instructor: 'Sarah Johnson', time: 'Mon, Wed, Fri - 7:00 AM', duration: '60 min', capacity: 20, enrolled: 15, difficulty: 'Beginner' },
-    { id: '2', name: 'HIIT Training', instructor: 'Mike Rodriguez', time: 'Tue, Thu - 6:00 PM', duration: '45 min', capacity: 15, enrolled: 12, difficulty: 'Advanced' },
-    { id: '3', name: 'Spin Class', instructor: 'Emma Davis', time: 'Mon, Wed, Fri - 6:30 PM', duration: '45 min', capacity: 25, enrolled: 20, difficulty: 'Intermediate' },
-    { id: '4', name: 'Pilates', instructor: 'Lisa Chen', time: 'Tue, Thu - 9:00 AM', duration: '60 min', capacity: 15, enrolled: 10, difficulty: 'Beginner' },
-    { id: '5', name: 'Boxing', instructor: 'James Wilson', time: 'Wed, Sat - 7:00 PM', duration: '60 min', capacity: 12, enrolled: 8, difficulty: 'Intermediate' },
-  ]);
+  const [availableClasses, setAvailableClasses] = useState<UIAvailableClass[]>([]);
+  const [classesLoading, setClassesLoading] = useState<boolean>(false);
+  const [classesError, setClassesError] = useState<string | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [selectedClassForSchedule, setSelectedClassForSchedule] = useState<{ id: string; name: string } | null>(null);
+  const [classSessions, setClassSessions] = useState<ClassSession[]>([]);
+
+  // Map backend GymClass to UIAvailableClass
+  const mapToUI = (cls: GymClassModel): UIAvailableClass => {
+    // Build a concise schedule string from the first 1-2 entries
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const slots = (cls.schedule || []).slice(0, 2).map(s => `${days[s.dayOfWeek]} ${s.startTime}`);
+    const extraCount = Math.max(0, (cls.schedule || []).length - slots.length);
+    const time = slots.length > 0
+      ? `${slots.join(', ')}${extraCount > 0 ? ` +${extraCount} more` : ''}`
+      : 'See schedule';
+
+  // If difficulty isn't modeled in backend, default to Beginner
+  type WithOptionalDifficulty = GymClassModel & { difficulty?: UIAvailableClass['difficulty'] };
+  const difficulty: UIAvailableClass['difficulty'] = (cls as WithOptionalDifficulty).difficulty ?? 'Beginner';
+
+    return {
+      id: cls.id,
+      name: cls.name,
+      instructor: cls.instructor,
+      time,
+      duration: `${cls.duration} min`,
+      capacity: cls.capacity,
+      enrolled: cls.currentBookings ?? 0,
+      difficulty,
+    };
+  };
+
+  // Fetch enrolled classes when the Book Class modal is opened
+  useEffect(() => {
+    const fetchClasses = async () => {
+      if (!bookClassOpen) return;
+      setClassesLoading(true);
+      setClassesError(null);
+      try {
+        const classes = await getEnrolledClassesForUser(user!.uid);
+        const ui = classes.map(mapToUI);
+        // Fallback to sample data if none configured yet
+        if (ui.length === 0) {
+          setAvailableClasses([
+            { id: 'sample-1', name: 'Yoga Flow', instructor: 'Sarah Johnson', time: 'Mon 07:00', duration: '60 min', capacity: 20, enrolled: 15, difficulty: 'Beginner' },
+            { id: 'sample-2', name: 'HIIT Training', instructor: 'Mike Rodriguez', time: 'Tue 18:00', duration: '45 min', capacity: 15, enrolled: 12, difficulty: 'Advanced' },
+          ]);
+        } else {
+          setAvailableClasses(ui);
+        }
+      } catch (err) {
+        console.error('Error loading classes:', err);
+        setClassesError('Failed to load classes. Please try again later.');
+        // Maintain previous list or populate with safe sample for UX
+        if (availableClasses.length === 0) {
+          setAvailableClasses([
+            { id: 'sample-1', name: 'Yoga Flow', instructor: 'Sarah Johnson', time: 'Mon 07:00', duration: '60 min', capacity: 20, enrolled: 15, difficulty: 'Beginner' },
+          ]);
+        }
+      } finally {
+        setClassesLoading(false);
+      }
+    };
+
+    fetchClasses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookClassOpen]);
 
   // Fetch member profile
   useEffect(() => {
@@ -157,12 +225,7 @@ const MemberDashboard: React.FC = () => {
     }
   }, [paymentsOpen, user]);
 
-  // Handle book class
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleBookClass = (_classId: string) => {
-    alert(`Successfully booked class! You will receive a confirmation email.`);
-    setBookClassOpen(false);
-  };
+  // Previously booking; now members view only enrolled classes & schedules
 
   // Handle profile update
   const handleUpdateProfile = async () => {
@@ -367,7 +430,13 @@ const MemberDashboard: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
-            {availableClasses.map((gymClass) => (
+            {classesLoading && (
+              <div className="text-center py-6 text-gray-400">Loading classes…</div>
+            )}
+            {classesError && (
+              <div className="text-center py-3 text-red-400 text-sm">{classesError}</div>
+            )}
+            {!classesLoading && availableClasses.map((gymClass) => (
               <div key={gymClass.id} className="bg-gray-800/50 backdrop-blur-sm border border-white/10 rounded-lg p-4 hover:border-blue-400/50 transition-all">
                 <div className="flex justify-between items-start mb-3">
                   <div>
@@ -394,16 +463,63 @@ const MemberDashboard: React.FC = () => {
                     <span className="text-white font-medium">{gymClass.enrolled}/{gymClass.capacity}</span> enrolled
                   </div>
                   <Button 
-                    onClick={() => handleBookClass(gymClass.id)}
-                    disabled={gymClass.enrolled >= gymClass.capacity}
+                    onClick={async () => {
+                      setSelectedClassForSchedule({ id: gymClass.id, name: gymClass.name });
+                      setScheduleOpen(true);
+                      setScheduleLoading(true);
+                      setScheduleError(null);
+                      try {
+                        const sessions = await getClassSessions(gymClass.id);
+                        setClassSessions(sessions);
+                      } catch (e) {
+                        console.error('Failed to load schedule', e);
+                        setScheduleError('Failed to load schedule.');
+                      } finally {
+                        setScheduleLoading(false);
+                      }
+                    }}
                     className="bg-blue-500 hover:bg-blue-600 text-white"
                   >
-                    {gymClass.enrolled >= gymClass.capacity ? 'Class Full' : 'Book Now'}
+                    View Schedule
                   </Button>
                 </div>
               </div>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Class Schedule Modal */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="bg-gray-900/95 backdrop-blur-md border border-white/20 text-white max-w-xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">{selectedClassForSchedule ? `${selectedClassForSchedule.name} — Schedule` : 'Class Schedule'}</DialogTitle>
+            <DialogDescription className="text-gray-400">Upcoming and recent sessions</DialogDescription>
+          </DialogHeader>
+          {scheduleLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+              <span className="text-gray-300">Loading sessions...</span>
+            </div>
+          ) : scheduleError ? (
+            <div className="text-center text-red-400 py-6">{scheduleError}</div>
+          ) : classSessions.length === 0 ? (
+            <div className="text-center text-gray-400 py-10">No sessions found for this class.</div>
+          ) : (
+            <div className="space-y-3">
+              {classSessions.map((s) => (
+                <div key={s.id} className="p-3 bg-gray-800/40 border border-gray-700 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-white font-semibold">{(s.date instanceof Date ? s.date : new Date(s.date)).toLocaleDateString()} • {s.startTime} - {s.endTime}</div>
+                      <div className="text-xs text-gray-400 capitalize">Status: {s.status.replace('-', ' ')}</div>
+                    </div>
+                    <div className="text-xs text-gray-400">Capacity: {s.maxCapacity} • Attendees: {s.attendees?.length || 0}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -706,6 +822,9 @@ const MemberDashboard: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AI ChatBot */}
+      <ChatBot />
     </div>
   );
 };

@@ -7,6 +7,7 @@ import LogoutButton from '../../components/common/LogoutButton';
 import { MemberSelector } from '../../components/admin/MemberSelector';
 import { SupplementStoreModals } from '../../components/admin/SupplementStoreModals';
 import { DietDetailsModals } from '../../components/admin/DietDetailsModals';
+import ChatBot from '../../components/ai/chatBot';
 import { 
   getDashboardStats, 
   getRevenueData, 
@@ -53,8 +54,12 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { addMember, getMembers, updateMember, deleteMember } from '../../services/member/memberService';
-import { getAllUsers, checkUserHasMemberProfile, type FirebaseUser } from '../../services/user/userService';
+// getActiveClasses below is re-imported with additional functions; keep only one consolidated import
+import { enrollToClass } from '../../services/fitness/enrollmentService';
+import type { GymClass, CreateClassRequest } from '../../types/class';
+import { getAllUsers, getUsersByRole, checkUserHasMemberProfile, type FirebaseUser } from '../../services/user/userService';
 import { createBill, getPendingBills as fetchPendingBills, getAllBills } from '../../services/billing/billService';
+import { getActiveClasses, createClass, updateClass as updateGymClass, deleteClass as softDeleteClass } from '../../services/fitness/classService';
 import { 
   getFeePackages, 
   createFeePackage, 
@@ -142,6 +147,10 @@ const AdminDashboard: React.FC = () => {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // Class assignment for Add Member
+  const [availableClassesAssign, setAvailableClassesAssign] = useState<GymClass[]>([]);
+  const [assignClassesLoading, setAssignClassesLoading] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<string>('');
 
   // Create Bill Modal State
   const [isCreateBillOpen, setIsCreateBillOpen] = useState(false);
@@ -199,6 +208,23 @@ const AdminDashboard: React.FC = () => {
 
   // Available packages for member assignment
   const [availablePackages, setAvailablePackages] = useState<FeePackage[]>([]);
+  const [isManageClassesOpen, setIsManageClassesOpen] = useState(false);
+  const [classesLoading, setClassesLoading] = useState(false);
+  const [classesList, setClassesList] = useState<GymClass[]>([]);
+  const [showInactiveClasses, setShowInactiveClasses] = useState(false);
+  const [inactiveClassesList, setInactiveClassesList] = useState<GymClass[]>([]);
+  const [selectedClassAdmin, setSelectedClassAdmin] = useState<GymClass | null>(null);
+  const [isAddClassOpen, setIsAddClassOpen] = useState(false);
+  const [isEditClassOpen, setIsEditClassOpen] = useState(false);
+  const [trainerList, setTrainerList] = useState<FirebaseUser[]>([]);
+  const [classForm, setClassForm] = useState<CreateClassRequest & { trainerId?: string; trainerName?: string }>({
+    name: '',
+    instructor: '',
+    description: '',
+    duration: 60,
+    capacity: 20,
+    schedule: [{ dayOfWeek: 1, startTime: '09:00', endTime: '10:00' }],
+  });
 
   // Manage Notifications Modal State
   const [isManageNotificationsOpen, setIsManageNotificationsOpen] = useState(false);
@@ -282,6 +308,23 @@ const AdminDashboard: React.FC = () => {
     fetchDashboardData();
   }, []);
 
+  // Fetch active/inactive classes for Manage Classes modal
+  useEffect(() => {
+    if (isManageClassesOpen) {
+      setClassesLoading(true);
+      (async () => {
+        const active = await getActiveClasses();
+        // Simulate fetching all and filtering inactive
+        // If you have a getAllClasses, use that instead
+        // For now, simulate by fetching all and filtering
+        const all = await getActiveClasses();
+        setClassesList(active);
+        setInactiveClassesList(all.filter(cls => cls.isActive === false));
+        setClassesLoading(false);
+      })();
+    }
+  }, [isManageClassesOpen]);
+
   // Handle input changes
   const handleInputChange = (field: string, value: string | Date) => {
     if (field.includes('.')) {
@@ -306,6 +349,18 @@ const AdminDashboard: React.FC = () => {
     setIsAddMemberOpen(true);
     setShowUserSelector(true); // Show user selector by default
     loadAvailableUsers(); // Load users when opening
+    // Load classes for assignment
+    (async () => {
+      try {
+        setAssignClassesLoading(true);
+        const classes = await getActiveClasses();
+        setAvailableClassesAssign(classes);
+      } catch (e) {
+        console.error('Failed to load classes', e);
+      } finally {
+        setAssignClassesLoading(false);
+      }
+    })();
   };
 
   // Close Add Member Modal
@@ -314,6 +369,7 @@ const AdminDashboard: React.FC = () => {
     setShowUserSelector(false);
     setSelectedUserId(null);
     setUserSearchQuery('');
+  setSelectedClassId('');
     // Reset form
     setFormData({
       firstName: '',
@@ -410,12 +466,26 @@ const AdminDashboard: React.FC = () => {
 
     try {
       // Add member to Firebase with optional userId link
-      await addMember({
+      const newMemberId = await addMember({
         ...formData,
         userId: selectedUserId || undefined, // Link to Firebase Auth user if selected
         createdAt: new Date(),
         updatedAt: new Date()
       });
+
+      // If a class is selected, enroll the member/user into that class
+      if (selectedClassId) {
+        try {
+          await enrollToClass({
+            classId: selectedClassId,
+            userId: selectedUserId || undefined,
+            memberId: newMemberId,
+          });
+        } catch (err) {
+          console.error('Failed to enroll member to class:', err);
+          alert('Member was added, but enrolling to the selected class failed. You can try again from class management.');
+        }
+      }
 
       // If a package was assigned, increment the package member count
       if (formData.package?.packageId) {
@@ -1661,6 +1731,29 @@ const AdminDashboard: React.FC = () => {
                   <Apple className="w-8 h-8 mb-2 text-green-400" />
                   <span className="text-sm font-medium text-gray-200">Diet Details</span>
                 </button>
+                <button 
+                  onClick={async () => {
+                    setIsManageClassesOpen(true);
+                    setClassesLoading(true);
+                    try {
+                      const [classes, trainers] = await Promise.all([
+                        getActiveClasses(),
+                        getUsersByRole('trainer')
+                      ]);
+                      setClassesList(classes);
+                      setTrainerList(trainers);
+                    } catch (e) {
+                      console.error('Failed to load classes/trainers', e);
+                      alert('Failed to load classes/trainers.');
+                    } finally {
+                      setClassesLoading(false);
+                    }
+                  }}
+                  className="flex flex-col items-center justify-center p-6 border border-gray-700 rounded-lg hover:border-emerald-500 hover:bg-emerald-500/10 transition-all"
+                >
+                  <Calendar className="w-8 h-8 mb-2 text-emerald-400" />
+                  <span className="text-sm font-medium text-gray-200">Manage Classes</span>
+                </button>
               </>
             )}
           </div>
@@ -1955,7 +2048,7 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Membership Details */}
+              {/* Membership Details */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-white border-b border-gray-700 pb-2">Membership Details</h3>
               
@@ -1964,6 +2057,33 @@ const AdminDashboard: React.FC = () => {
                   <strong>Note:</strong> Membership ID is the gym member number (e.g., MEM-001). 
                   User ID is optional - leave blank if this member doesn't have a login account yet.
                 </p>
+              </div>
+
+              {/* Class Assignment */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-white border-b border-gray-700 pb-2">Class Assignment</h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Assign to Class (Optional)</label>
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => setSelectedClassId(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="">No Class</option>
+                    {assignClassesLoading ? (
+                      <option disabled>Loading classes...</option>
+                    ) : (
+                      availableClassesAssign.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name} — {cls.instructor}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  {selectedClassId && (
+                    <p className="text-xs text-gray-400 mt-1">Member will be enrolled to this class after creation.</p>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -2127,6 +2247,302 @@ const AdminDashboard: React.FC = () => {
             </DialogFooter>
           </form>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Manage Classes Modal */}
+      <Dialog open={isManageClassesOpen} onOpenChange={setIsManageClassesOpen}>
+        <DialogContent className="bg-gray-900/95 border-white/20 backdrop-blur-md max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-white">Manage Classes</DialogTitle>
+            <DialogDescription className="text-gray-300">
+              Create, edit, deactivate, assign trainers, and reactivate inactive classes
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex justify-between mb-4">
+            <Button
+              onClick={() => {
+                setSelectedClassAdmin(null);
+                setClassForm({
+                  name: '',
+                  instructor: '',
+                  description: '',
+                  duration: 60,
+                  capacity: 20,
+                  schedule: [{ dayOfWeek: 1, startTime: '09:00', endTime: '10:00' }],
+                });
+                setIsAddClassOpen(true);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              + Add Class
+            </Button>
+            <Button
+              onClick={() => setShowInactiveClasses(v => !v)}
+              className="bg-gray-700 hover:bg-gray-800 text-white"
+            >
+              {showInactiveClasses ? 'Hide Inactive' : 'Show Inactive'}
+            </Button>
+          </div>
+
+          {classesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mr-3"></div>
+              <span className="text-gray-300">Loading classes...</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {classesList.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">No classes found</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {classesList.map((cls) => (
+                    <div key={cls.id} className="p-4 bg-gray-800/40 border border-gray-700 rounded-lg">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <div className="text-white font-semibold">{cls.name}</div>
+                          <div className="text-xs text-gray-400">Trainer: {(cls as unknown as { trainerName?: string }).trainerName || cls.instructor}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedClassAdmin(cls);
+                              setClassForm({
+                                name: cls.name,
+                                instructor: cls.instructor,
+                                description: cls.description || '',
+                                duration: cls.duration,
+                                capacity: cls.capacity,
+                                schedule: cls.schedule,
+                                // Some class docs may store trainer fields; treat as optional
+                                trainerId: (cls as unknown as { trainerId?: string }).trainerId,
+                                trainerName: (cls as unknown as { trainerName?: string }).trainerName,
+                              });
+                              setIsEditClassOpen(true);
+                            }}
+                            className="px-2 py-1 text-xs rounded bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                          >Edit</button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Deactivate this class?')) return;
+                              await softDeleteClass(cls.id);
+                              const refreshed = await getActiveClasses();
+                              setClassesList(refreshed);
+                            }}
+                            className="px-2 py-1 text-xs rounded bg-red-500/20 text-red-400 border border-red-500/30"
+                          >Deactivate</button>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400">Capacity: {cls.capacity} • Enrolled: {cls.currentBookings}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showInactiveClasses && (
+                <div className="mt-6">
+                  <h4 className="text-lg font-semibold text-gray-200 mb-2">Inactive Classes</h4>
+                  {inactiveClassesList.length === 0 ? (
+                    <div className="text-center py-6 text-gray-500">No inactive classes.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {inactiveClassesList.map((cls) => (
+                        <div key={cls.id} className="p-4 bg-gray-700/40 border border-gray-600 rounded-lg opacity-70">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <div className="text-white font-semibold">{cls.name}</div>
+                              <div className="text-xs text-gray-400">Trainer: {(cls as unknown as { trainerName?: string }).trainerName || cls.instructor}</div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={async () => {
+                                  await updateGymClass(cls.id, { isActive: true });
+                                  const active = await getActiveClasses();
+                                  const all = await getActiveClasses();
+                                  setClassesList(active);
+                                  setInactiveClassesList(all.filter(c => c.isActive === false));
+                                }}
+                                className="px-2 py-1 text-xs rounded bg-green-500/20 text-green-400 border border-green-500/30"
+                              >Reactivate</button>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-400">Capacity: {cls.capacity} • Enrolled: {cls.currentBookings}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Add/Edit Class Inline Modal */}
+          <Dialog open={isAddClassOpen || isEditClassOpen} onOpenChange={(open) => { if (!open) { setIsAddClassOpen(false); setIsEditClassOpen(false); }}}>
+            <DialogContent className="bg-gray-900/95 border-white/20 backdrop-blur-md max-w-2xl max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-xl text-white">{isAddClassOpen ? 'Add Class' : 'Edit Class'}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Class Name</label>
+                  <input
+                    value={classForm.name}
+                    onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800/60 border border-gray-700 rounded text-white"
+                    placeholder="e.g., Yoga, HIIT"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Description</label>
+                  <textarea
+                    value={classForm.description}
+                    onChange={(e) => setClassForm({ ...classForm, description: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-800/60 border border-gray-700 rounded text-white"
+                    rows={3}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-1">Duration (min)</label>
+                    <input
+                      type="number"
+                      value={classForm.duration}
+                      onChange={(e) => setClassForm({ ...classForm, duration: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-gray-800/60 border border-gray-700 rounded text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-1">Capacity</label>
+                    <input
+                      type="number"
+                      value={classForm.capacity}
+                      onChange={(e) => setClassForm({ ...classForm, capacity: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-gray-800/60 border border-gray-700 rounded text-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Trainer</label>
+                  <select
+                    value={classForm.trainerId || ''}
+                    onChange={(e) => {
+                      const t = trainerList.find(tr => tr.id === e.target.value);
+                      setClassForm({
+                        ...classForm,
+                        trainerId: t?.id,
+                        trainerName: t?.displayName || t?.email || 'Trainer',
+                        instructor: t?.displayName || t?.email || 'Trainer',
+                      });
+                    }}
+                    className="w-full px-3 py-2 bg-gray-800/60 border border-gray-700 rounded text-white"
+                  >
+                    <option value="">Select a trainer</option>
+                    {trainerList.map(t => (
+                      <option key={t.id} value={t.id}>{t.displayName || t.email}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm text-gray-300">Schedule</label>
+                    <Button
+                      onClick={() => setClassForm({ ...classForm, schedule: [...classForm.schedule, { dayOfWeek: 1, startTime: '09:00', endTime: '10:00' }] })}
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >+ Add Slot</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {classForm.schedule.map((slot: { dayOfWeek: number; startTime: string; endTime: string }, idx: number) => (
+                      <div key={idx} className="grid grid-cols-3 gap-2">
+                        <select
+                          value={slot.dayOfWeek}
+                          onChange={(e) => {
+                            const schedule = [...classForm.schedule];
+                            schedule[idx] = { ...schedule[idx], dayOfWeek: parseInt(e.target.value) };
+                            setClassForm({ ...classForm, schedule });
+                          }}
+                          className="px-2 py-2 bg-gray-800/60 border border-gray-700 rounded text-white"
+                        >
+                          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
+                            <option key={i} value={i}>{d}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="time"
+                          value={slot.startTime}
+                          onChange={(e) => {
+                            const schedule = [...classForm.schedule];
+                            schedule[idx] = { ...schedule[idx], startTime: e.target.value };
+                            setClassForm({ ...classForm, schedule });
+                          }}
+                          className="px-2 py-2 bg-gray-800/60 border border-gray-700 rounded text-white"
+                        />
+                        <input
+                          type="time"
+                          value={slot.endTime}
+                          onChange={(e) => {
+                            const schedule = [...classForm.schedule];
+                            schedule[idx] = { ...schedule[idx], endTime: e.target.value };
+                            setClassForm({ ...classForm, schedule });
+                          }}
+                          className="px-2 py-2 bg-gray-800/60 border border-gray-700 rounded text-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        if (!classForm.trainerId || !classForm.trainerName) {
+                          alert('Please select a trainer');
+                          return;
+                        }
+                        if (isAddClassOpen) {
+                          await createClass({
+                            name: classForm.name,
+                            instructor: classForm.instructor,
+                            description: classForm.description,
+                            duration: classForm.duration,
+                            capacity: classForm.capacity,
+                            schedule: classForm.schedule,
+                            trainerId: classForm.trainerId,
+                            trainerName: classForm.trainerName,
+                          });
+                        } else if (isEditClassOpen && selectedClassAdmin) {
+                          await updateGymClass(selectedClassAdmin.id, {
+                            name: classForm.name,
+                            instructor: classForm.instructor,
+                            description: classForm.description,
+                            duration: classForm.duration,
+                            capacity: classForm.capacity,
+                            schedule: classForm.schedule,
+                          });
+                        }
+                        const refreshed = await getActiveClasses();
+                        setClassesList(refreshed);
+                        setIsAddClassOpen(false);
+                        setIsEditClassOpen(false);
+                      } catch (e) {
+                        console.error('Failed to save class', e);
+                        alert('Failed to save class');
+                      }
+                    }}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                  >Save</Button>
+                  <Button
+                    onClick={() => { setIsAddClassOpen(false); setIsEditClassOpen(false); }}
+                    variant="outline"
+                    className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800"
+                  >Cancel</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <DialogFooter>
+            <Button onClick={() => setIsManageClassesOpen(false)} className="bg-gray-700 hover:bg-gray-600 text-white">Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -3605,6 +4021,9 @@ const AdminDashboard: React.FC = () => {
 
         </Layout>
       </div>
+
+      {/* AI ChatBot */}
+      <ChatBot />
     </div>
   );
 };

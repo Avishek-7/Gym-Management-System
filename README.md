@@ -66,6 +66,15 @@ A comprehensive, modern web application for managing gym operations, members, bi
 - **Custom Templates**: Create reusable notification templates
 - **Multi-channel**: Email and in-app notifications
 
+### 🤖 AI ChatBot (NEW!)
+- **Google Gemini Integration**: Powered by Google's Gemini AI
+- **Smart Intent Detection**: Automatically understands user queries
+- **Context-Aware Responses**: Fetches relevant data from Firestore
+- **Multi-Purpose Support**: Billing, diet, classes, membership info
+- **Conversation History**: Maintains context across messages
+- **Floating UI**: Modern dark-themed chat interface
+- **Role-Based Context**: Personalized responses for Admin/Trainer/Member
+
 ### 🔐 Security & Access Control
 - **Role-Based Access (RBAC)**: Admin, Trainer, and Member roles
 - **Firebase Auth**: Secure authentication with email/password
@@ -143,13 +152,19 @@ A comprehensive, modern web application for managing gym operations, members, bi
    
    Create a `.env` file in the root directory:
    ```env
+   # Firebase Configuration
    VITE_FIREBASE_API_KEY=your_api_key
    VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
    VITE_FIREBASE_PROJECT_ID=your_project_id
    VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
    VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
    VITE_FIREBASE_APP_ID=your_app_id
+   
+   # Google Gemini AI (for ChatBot)
+   VITE_GOOGLE_GEMINI_API_KEY=your_gemini_api_key
    ```
+   
+   > 📚 **AI ChatBot Setup**: See [AI_CHATBOT_SETUP.md](./AI_CHATBOT_SETUP.md) for detailed instructions on getting your Google Gemini API key.
 
 5. **Deploy Firestore security rules**
    ```bash
@@ -178,6 +193,8 @@ gym-management-system/
 │   │   │   ├── MemberManagement.tsx
 │   │   │   ├── SupplementStoreModals.tsx
 │   │   │   └── ...
+│   │   ├── ai/                 # AI ChatBot component (NEW!)
+│   │   │   └── chatBot.tsx
 │   │   ├── auth/               # Authentication components
 │   │   │   ├── LoginForm.tsx
 │   │   │   └── RegisterForm.tsx
@@ -205,6 +222,9 @@ gym-management-system/
 │   │   ├── auth/               # Authentication services
 │   │   ├── billing/            # Billing & payment services
 │   │   ├── core/               # Firebase config & core services
+│   │   │   └── ai/             # AI services (NEW!)
+│   │   │       ├── aiChatService.ts    # Gemini integration
+│   │   │       └── intentDetector.ts   # Intent detection
 │   │   ├── diet/               # Diet plan services
 │   │   ├── inventory/          # Supplement inventory services
 │   │   ├── member/             # Member management services
@@ -226,11 +246,13 @@ gym-management-system/
 │   └── index.css               # Global styles
 ├── firestore.rules             # Firestore security rules
 ├── .env                        # Environment variables (create this)
+├── .env.example                # Environment template
 ├── .gitignore
 ├── package.json
 ├── tsconfig.json
 ├── tailwind.config.js
 ├── vite.config.ts
+├── AI_CHATBOT_SETUP.md         # AI ChatBot setup guide (NEW!)
 └── README.md
 ```
 
@@ -284,6 +306,9 @@ VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 VITE_FIREBASE_MEASUREMENT_ID=
+
+# Google Gemini AI (for ChatBot - see AI_CHATBOT_SETUP.md)
+VITE_GOOGLE_GEMINI_API_KEY=
 ```
 
 ## 📜 Available Scripts

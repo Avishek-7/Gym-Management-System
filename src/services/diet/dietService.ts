@@ -24,6 +24,7 @@ import type {
   DietStats,
   Meal,
 } from '../../types/diet';
+import { logger } from '../../utils/logger';
 
 const DIET_PLANS_COLLECTION = 'dietPlans';
 const DIET_PROGRESS_COLLECTION = 'dietProgress';
@@ -34,9 +35,20 @@ const DIET_TEMPLATES_COLLECTION = 'dietTemplates';
 export const createDietPlan = async (
   planData: CreateDietPlanRequest
 ): Promise<string> => {
+  logger.info('Creating diet plan', {
+    service: 'dietService',
+    action: 'createDietPlan',
+    memberId: planData.memberId,
+    goal: planData.goal
+  });
+
   try {
     const user = auth.currentUser;
     if (!user) {
+      logger.error('Diet plan creation failed - user not authenticated', new Error('Not authenticated'), {
+        service: 'dietService',
+        action: 'createDietPlan'
+      });
       throw new Error('User not authenticated');
     }
 
@@ -75,27 +87,49 @@ export const createDietPlan = async (
       updatedAt: serverTimestamp(),
     };
 
+    logger.logFirebaseOperation('create', 'dietPlans', {
+      memberId: planData.memberId,
+      mealCount: mealsWithIds.length
+    });
+
     const docRef = await addDoc(
       collection(db, DIET_PLANS_COLLECTION),
       dietPlanDoc
     );
 
+    logger.info('Diet plan created successfully', {
+      service: 'dietService',
+      planId: docRef.id,
+      memberId: planData.memberId,
+      mealCount: mealsWithIds.length
+    });
+
     return docRef.id;
   } catch (error) {
-    console.error('Error creating diet plan:', error);
+    logger.error('Failed to create diet plan', error, {
+      service: 'dietService',
+      action: 'createDietPlan',
+      memberId: planData.memberId
+    });
     throw error;
   }
 };
 
 export const getAllDietPlans = async (): Promise<DietPlan[]> => {
+  logger.debug('Fetching all diet plans', {
+    service: 'dietService',
+    action: 'getAllDietPlans'
+  });
+
   try {
+    logger.logFirebaseOperation('query', 'dietPlans');
     const q = query(
       collection(db, DIET_PLANS_COLLECTION),
       orderBy('createdAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
 
-    return querySnapshot.docs.map((doc) => {
+    const plans = querySnapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -106,8 +140,18 @@ export const getAllDietPlans = async (): Promise<DietPlan[]> => {
         updatedAt: data.updatedAt?.toDate(),
       } as DietPlan;
     });
+
+    logger.info('Diet plans fetched successfully', {
+      service: 'dietService',
+      count: plans.length
+    });
+
+    return plans;
   } catch (error) {
-    console.error('Error fetching diet plans:', error);
+    logger.error('Failed to fetch diet plans', error, {
+      service: 'dietService',
+      action: 'getAllDietPlans'
+    });
     throw error;
   }
 };
