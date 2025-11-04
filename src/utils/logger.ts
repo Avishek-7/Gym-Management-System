@@ -17,6 +17,8 @@
  * logger.error('Failed to fetch data', error, { context: 'memberService' });
  */
 
+import { getEnvironment } from './env';
+
 export const LogLevel = {
   DEBUG: 0,
   INFO: 1,
@@ -59,7 +61,8 @@ class Logger {
   constructor() {
     // Set log level based on environment
     // Production: INFO and above, Development: DEBUG and above
-    this.logLevel = import.meta.env.PROD ? LogLevel.INFO : LogLevel.DEBUG;
+    const env = getEnvironment();
+    this.logLevel = env.isProd ? LogLevel.INFO : LogLevel.DEBUG;
     this.enableConsole = true;
   }
 
@@ -194,7 +197,7 @@ class Logger {
     levelName: string,
     message: string,
     contextOrError?: LogContext | unknown,
-    error?: unknown
+    contextOrError2?: unknown
   ): void {
     // Check if logging is enabled for this level
     if (level < this.logLevel) return;
@@ -203,11 +206,21 @@ class Logger {
     let errorToLog: unknown | undefined;
 
     // Handle flexible parameters
-    if (contextOrError instanceof Error || typeof contextOrError === 'string') {
+    // Case 1: First param is Error and second param exists (could be context)
+    if (contextOrError instanceof Error) {
       errorToLog = contextOrError;
-    } else if (contextOrError && typeof contextOrError === 'object') {
+      if (contextOrError2 && typeof contextOrError2 === 'object') {
+        context = contextOrError2 as LogContext;
+      }
+    } 
+    // Case 2: First param is context and second is error
+    else if (contextOrError && typeof contextOrError === 'object' && contextOrError2) {
       context = contextOrError as LogContext;
-      errorToLog = error;
+      errorToLog = contextOrError2;
+    }
+    // Case 3: First param is context only
+    else if (contextOrError && typeof contextOrError === 'object') {
+      context = contextOrError as LogContext;
     }
 
     const entry = this.createLogEntry(levelName, message, context, errorToLog);
@@ -242,7 +255,7 @@ class Logger {
    * ERROR level logging
    */
   error(message: string, error: unknown, context?: LogContext): void {
-    this.log(LogLevel.ERROR, 'ERROR', message, context, error);
+    this.log(LogLevel.ERROR, 'ERROR', message, error, context);
   }
 
   /**

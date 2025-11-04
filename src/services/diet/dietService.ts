@@ -239,7 +239,8 @@ export const updateDietPlan = async (
   try {
     const docRef = doc(db, DIET_PLANS_COLLECTION, planId);
     
-    const updateData: Record<string, unknown> = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: Record<string, any> = {
       ...updates,
       updatedAt: serverTimestamp(),
     };
